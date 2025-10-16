@@ -1,7 +1,7 @@
 """
 Main script to run the training pipeline.
 
-It is configured via a gin configuration file (see configs/RFF_AChE_ECFP_human.gin for an example).
+It is configured via a gin configuration file (see configs/train.gin for an example).
 The training pipeline includes:
 - Preparing and splitting the data (if train and test paths are not provided explicitly)
 - Training the model (using set hyperparameters or optimizing them via cross-validation)
@@ -24,13 +24,13 @@ if __name__ == "__main__":
         "-c",
         type=str,
         help="Path to the config file",
-        default="configs/RFF_AChE_ECFP_human.gin",
+        default="configs/train.gin",
     )
     parser.add_argument(
         "--log-level",
         type=str,
         help="Can be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL",
-        default="DEBUG",
+        default="INFO",
     )
     args = parser.parse_args()
 
