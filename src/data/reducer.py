@@ -44,12 +44,10 @@ class ScikitReducerBase(ReducerBase):
         self,
         n_dims: int = 2,
         params: Dict[str, Any] = None,
-        plot_title: str | None = None,
     ):
         super().__init__(params)
-        plot_title = plot_title if plot_title is not None else f"{self.name} projection"
         self.visualizer = ProjectionVisualizer(
-            n_dims=n_dims, projection_type=self.name, plot_title=plot_title
+            n_dims=n_dims, projection_type=self.name
         )
 
     def get_associated_visualizer(self):
@@ -103,14 +101,13 @@ class TsneReducer(ScikitReducerBase):
         perplexity: float = 30.0,
         max_iter: int = 1000,
         random_state: int = 42,
-        plot_title: str | None = None,
     ):
         params = {
             "perplexity": perplexity,
             "max_iter": max_iter,
             "random_state": random_state,
         }
-        super().__init__(n_dims=n_dims, params=params, plot_title=plot_title)
+        super().__init__(n_dims=n_dims, params=params)
 
     def _init_model(self, params):
         """Initialize the model."""
@@ -133,14 +130,13 @@ class UmapReducer(ScikitReducerBase):
         n_neighbors: int = 15,
         min_dist: float = 0.1,
         random_state: int = 42,
-        plot_title: str | None = None,
     ):
         params = {
             "n_neighbors": n_neighbors,
             "min_dist": min_dist,
             "random_state": random_state,
         }
-        super().__init__(n_dims=n_dims, params=params, plot_title=plot_title)
+        super().__init__(n_dims=n_dims, params=params)
 
     def _init_model(self, params):
         """Initialize the model."""
