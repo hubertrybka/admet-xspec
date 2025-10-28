@@ -64,7 +64,7 @@ class ManagementPipeline:
                 self.visualizer.set_plot_title(plot_title)
             else:
                 self.visualizer.set_plot_title(
-                    f"{self.reducer.name} projection of {featurizer.name} features"
+                    f"{self.reducer.name} projection of {self.featurizer.feature_name} features"
                 )
 
     def run(self):

@@ -46,9 +46,7 @@ class ScikitReducerBase(ReducerBase):
         params: Dict[str, Any] = None,
     ):
         super().__init__(params)
-        self.visualizer = ProjectionVisualizer(
-            n_dims=n_dims, projection_type=self.name
-        )
+        self.visualizer = ProjectionVisualizer(n_dims=n_dims, projection_type=self.name)
 
     def get_associated_visualizer(self):
         """Return the visualizer object for this reducer."""

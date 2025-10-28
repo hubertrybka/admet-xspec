@@ -29,6 +29,7 @@ class ProjectionVisualizer(VisualizerBase):
         projection_type (str | None): Type of dimensionality reduction used (e.g., 'PCA', 't-SNE').
         plot_title (str | None): Title for the plot
     """
+
     def __init__(
         self,
         n_dims: int = 2,
