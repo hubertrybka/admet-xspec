@@ -10,6 +10,9 @@ ManagementPipeline.explore_datasets_list = [
     'ache_rat.csv',
 ]
 
+# Optionally, set the plot title - if None, an automatic title will be generated
+ManagementPipeline.plot_title = None
+
 ManagementPipeline.raw_input_dir = 'data/admet_transfer'
 ManagementPipeline.normalized_input_dir = 'data/preprocessing'
 ManagementPipeline.output_dir = 'data/mgmt_output'
