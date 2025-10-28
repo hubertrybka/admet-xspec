@@ -25,8 +25,8 @@ def get_clean_smiles(smiles: str, remove_salt: bool = True) -> str | None:
         if mol is None:
             return None
         if remove_salt:
-            mol = SaltRemover().StripMol(mol)
-            mol = _RdkitUncharger.un.uncharge(mol)  # (*) except for this
+            mol = _RdkitSaltRemover.StripMol(mol)
+            mol = _RdkitUncharger.uncharge(mol)  # (*) except for this
             # leave only the largest fragment
             mol_fragments = Chem.GetMolFrags(mol, asMols=True)
             if len(mol_fragments) > 0:

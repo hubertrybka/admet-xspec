@@ -1,0 +1,4 @@
+TsneExplorer.n_dims = 2
+
+explorer/gin.singleton.constructor = @TsneExplorer
+explorer = @explorer/gin.singleton()

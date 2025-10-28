@@ -2,56 +2,53 @@ import abc
 import io
 import gin
 import matplotlib.pyplot as plt
-import pathlib
 
 from PIL import Image
-import pickle
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import umap
 
 
 class ExplorerBase(abc.ABC):
-    def __init__(self):
+    """
+    Base class for dimensionality reduction data explorers. Subclasses are expected to be wrappers for
+    unsupervised learning methods like PCA, t-SNE, UMAP with scikit-learn interface (fit_transform).
+    """
+
+    def __init__(self, n_dims: int = 2, plot_title: str = "Data projection"):
+
+        if n_dims not in [2, 3]:
+            raise ValueError("n_dims must be either 2 or 3")
+        self.n_dims = n_dims
+
         self.model = self._init_model()
+
         self.input_dir = None
         self.output_dir = None
+        self.plot_title = None
 
     @abc.abstractmethod
     def _init_model(self):
         """Initialize the model."""
         pass
 
+    @property
     @abc.abstractmethod
-    def get_analyzed_form(self, df: pd.DataFrame):
+    def name(self) -> str:
+        """Name of the explorer."""
         pass
-
-    @abc.abstractmethod
-    def get_visualizable_form(self, dataset_dict: dict):
-        pass
-
-    @abc.abstractmethod
-    def get_visualization(self, dataset_dict: dict):
-        pass
-
-
-@gin.configurable
-class PcaExplorer(ExplorerBase):
-    def __init__(self, n_dims: int = 2):
-        self.n_dims = n_dims
-        self.model = self._init_model()
-
-    def _init_model(self):
-        """Initialize the model."""
-        pca = PCA(n_components=self.n_dims)
-        return pca
 
     def get_analyzed_form(self, df: pd.DataFrame) -> np.ndarray:
-        return self.model.fit_transform(df)
+        """Perform dimensionality reduction of a dataframe"""
+        reduced_data = self.model.fit_transform(df)
+        return reduced_data
 
     def get_visualizable_form(
         self, dataset_dict: dict[str, np.ndarray]
     ) -> dict[str, pd.DataFrame]:
+        """Convert ndarray to pandas dataframe for visualization."""
         out_dict = {}
         for ds, ndarray in dataset_dict.items():
             out_dict[ds] = pd.DataFrame(
@@ -59,11 +56,6 @@ class PcaExplorer(ExplorerBase):
             )
 
         return out_dict
-
-    def get_pca(self, df: pd.DataFrame) -> np.ndarray:
-        """Perform PCA on a dataframe"""
-        reduced_data = self.model.fit_transform(df)
-        return reduced_data
 
     def _visualize_2d(
         self, ndarray: np.ndarray, class_series: pd.Series, class_names: list[str]
@@ -79,9 +71,9 @@ class PcaExplorer(ExplorerBase):
         )
 
         ax.set(
-            title="First two PCA dimensions",
-            xlabel="1st Eigenvector",
-            ylabel="2nd Eigenvector",
+            title=self.plot_title,
+            xlabel=self.name + " 1",
+            ylabel=self.name + " 2",
         )
         ax.set_xticklabels([])
         ax.set_yticklabels([])
@@ -118,10 +110,10 @@ class PcaExplorer(ExplorerBase):
         )
 
         ax.set(
-            title="First three PCA dimensions",
-            xlabel="1st Eigenvector",
-            ylabel="2nd Eigenvector",
-            zlabel="3rd Eigenvector",
+            title=self.plot_title,
+            xlabel=self.name + " 1",
+            ylabel=self.name + " 2",
+            zlabel=self.name + " 3",
         )
         ax.xaxis.set_ticklabels([])
         ax.yaxis.set_ticklabels([])
@@ -167,3 +159,46 @@ class PcaExplorer(ExplorerBase):
             )
 
         return img
+
+
+@gin.configurable
+class PcaExplorer(ExplorerBase):
+    def __init__(self, n_dims: int = 2):
+        super().__init__(n_dims=n_dims)
+
+    def name(self) -> str:
+        return "PCA"
+
+    def _init_model(self):
+        """Initialize the model."""
+        pca = PCA(n_components=self.n_dims)
+        return pca
+
+
+@gin.configurable
+class TsneExplorer(ExplorerBase):
+    def __init__(self, n_dims: int = 2):
+        super().__init__(n_dims=n_dims)
+
+    def name(self) -> str:
+        return "t-SNE"
+
+    def _init_model(self):
+        """Initialize the model."""
+
+        tsne = TSNE(n_components=self.n_dims, init="random", random_state=42)
+        return tsne
+
+
+@gin.configurable
+class UmapExplorer(ExplorerBase):
+    def __init__(self, n_dims: int = 2):
+        super().__init__(n_dims=n_dims)
+
+    def _init_model(self):
+        """Initialize the model."""
+        umap_model = umap.UMAP(n_components=self.n_dims, random_state=42)
+        return umap_model
+
+    def name(self) -> str:
+        return "UMAP"
