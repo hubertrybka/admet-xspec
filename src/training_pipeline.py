@@ -50,10 +50,10 @@ class TrainingPipeline:
         self.refit_on_full_data = refit_on_full_data
 
         self.train_path = (
-            self._handle_multiple_data_input_paths(train_paths) if train_path else []
+            self._handle_multiple_data_input_paths(train_paths) if train_paths else []
         )
         self.test_path = (
-            self._handle_multiple_data_input_paths(test_paths) if test_path else []
+            self._handle_multiple_data_input_paths(test_paths) if test_paths else []
         )
 
         # If the predictor has an inject_featurizer method, invoke it

@@ -1,0 +1,4 @@
+UmapExplorer.n_dims = 2
+
+explorer/gin.singleton.constructor = @UmapExplorer
+explorer = @explorer/gin.singleton()
