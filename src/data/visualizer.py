@@ -27,8 +27,8 @@ class ProjectionVisualizer(VisualizerBase):
     def __init__(
         self,
         n_dims: int = 2,
-        projection_type: str = "PCA",
-        plot_title: str = "Projection",
+        projection_type: str | None = None,
+        plot_title: str | None = None,
     ):
         super().__init__()
         self.n_dims = n_dims
@@ -66,9 +66,9 @@ class ProjectionVisualizer(VisualizerBase):
         )
 
         ax.set(
-            title=self.plot_title,
-            xlabel=self.projection_type + " 1",
-            ylabel=self.projection_type + " 2",
+            title=str(self.plot_title),
+            xlabel=str(self.projection_type) + " 1",
+            ylabel=str(self.projection_type) + " 2",
         )
         ax.set_xticklabels([])
         ax.set_yticklabels([])
@@ -106,10 +106,10 @@ class ProjectionVisualizer(VisualizerBase):
         )
 
         ax.set(
-            title=self.plot_title,
-            xlabel=self.projection_type + " 1",
-            ylabel=self.projection_type + " 2",
-            zlabel=self.projection_type + " 3",
+            title=str(self.plot_title),
+            xlabel=str(self.projection_type) + " 1",
+            ylabel=str(self.projection_type) + " 2",
+            zlabel=str(self.projection_type) + " 3",
         )
         ax.xaxis.set_ticklabels([])
         ax.yaxis.set_ticklabels([])

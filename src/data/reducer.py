@@ -21,6 +21,12 @@ class ReducerBase(abc.ABC):
     def get_associated_visualizer(self):
         pass
 
+    @property
+    @abc.abstractmethod
+    def name(self) -> str:
+        """Name of the reducer."""
+        pass
+
     @abc.abstractmethod
     def _init_model(self, params):
         """Initialize the model."""
@@ -34,11 +40,17 @@ class ReducerBase(abc.ABC):
 class ScikitReducerBase(ReducerBase):
     """Base class for scikit-learn based reducers."""
 
-    def __init__(self, n_dims: int = 2, params: Dict[str, Any] = None):
+    def __init__(
+        self,
+        n_dims: int = 2,
+        params: Dict[str, Any] = None,
+        plot_title: str | None = None,
+    ):
         super().__init__(params)
-        self.visualizer = ProjectionVisualizer(n_dims=n_dims)
-        self.n_dims = n_dims
-        self.random_state = 42
+        plot_title = plot_title if plot_title is not None else f"{self.name} projection"
+        self.visualizer = ProjectionVisualizer(
+            n_dims=n_dims, projection_type=self.name, plot_title=plot_title
+        )
 
     def get_associated_visualizer(self):
         """Return the visualizer object for this reducer."""
@@ -61,50 +73,81 @@ class ScikitReducerBase(ReducerBase):
 class PcaReducer(ScikitReducerBase):
     """PCA reducer class."""
 
-    def __init__(self, n_dims: int = 2, random_state: int = 42):
+    def __init__(
+        self, n_dims: int = 2, random_state: int = 42, plot_title: str | None = None
+    ):
         params = {
             "n_components": n_dims,
             "random_state": random_state,
         }
-        super().__init__(n_dims=n_dims, params=params)
+        super().__init__(n_dims=n_dims, params=params, plot_title=plot_title)
 
     def _init_model(self, params):
         """Initialize the model."""
         pca = PCA(**params)
         return pca
 
+    @property
+    def name(self) -> str:
+        """Name of the reducer."""
+        return "PCA"
+
 
 @gin.configurable
 class TsneReducer(ScikitReducerBase):
     """T-SNE reducer class."""
 
-    def __init__(self, n_dims: int = 2, perplexity: float = 30.0, max_iter: int = 1000, random_state: int = 42):
+    def __init__(
+        self,
+        n_dims: int = 2,
+        perplexity: float = 30.0,
+        max_iter: int = 1000,
+        random_state: int = 42,
+        plot_title: str | None = None,
+    ):
         params = {
             "perplexity": perplexity,
             "max_iter": max_iter,
             "random_state": random_state,
         }
-        super().__init__(n_dims=n_dims, params=params)
+        super().__init__(n_dims=n_dims, params=params, plot_title=plot_title)
 
     def _init_model(self, params):
         """Initialize the model."""
         tsne_model = TSNE(**params)
         return tsne_model
 
+    @property
+    def name(self) -> str:
+        """Name of the reducer."""
+        return "t-SNE"
+
 
 @gin.configurable
 class UmapReducer(ScikitReducerBase):
     """UMAP reducer class."""
 
-    def __init__(self, n_dims: int = 2, n_neighbors: int = 15, min_dist: float = 0.1, random_state: int = 42):
+    def __init__(
+        self,
+        n_dims: int = 2,
+        n_neighbors: int = 15,
+        min_dist: float = 0.1,
+        random_state: int = 42,
+        plot_title: str | None = None,
+    ):
         params = {
             "n_neighbors": n_neighbors,
             "min_dist": min_dist,
             "random_state": random_state,
         }
-        super().__init__(n_dims=n_dims, params=params)
+        super().__init__(n_dims=n_dims, params=params, plot_title=plot_title)
 
     def _init_model(self, params):
         """Initialize the model."""
         umap_model = UMAP(**params)
         return umap_model
+
+    @property
+    def name(self) -> str:
+        """Name of the reducer."""
+        return "UMAP"
