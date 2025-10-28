@@ -10,7 +10,6 @@ import numpy as np
 
 class VisualizerBase(abc.ABC):
     def __init__(self):
-        self.model = self._init_model()
         self.input_dir = None
         self.output_dir = None
 
@@ -24,27 +23,36 @@ class VisualizerBase(abc.ABC):
 
 
 @gin.configurable
-class PcaVisualizer(VisualizerBase):
-    def __init__(self, n_dims: int = 2):
+class ProjectionVisualizer(VisualizerBase):
+    def __init__(
+        self,
+        n_dims: int = 2,
+        projection_type: str = "PCA",
+        plot_title: str = "Projection",
+    ):
+        super().__init__()
         self.n_dims = n_dims
+        self.projection_type = projection_type
+        self.plot_title = plot_title
 
-    def _get_visualizable_form(self, reduced_df_dict: dict[str, pd.DataFrame]) -> tuple[pd.Series, np.ndarray]:
+    def _get_visualizable_form(
+        self, reduced_df_dict: dict[str, pd.DataFrame]
+    ) -> tuple[pd.Series, np.ndarray]:
         """Convert reduced-dimensionality dataframes into form that can be fed into plt."""
         class_series = pd.concat(
             [pd.Series([i] * len(df)) for i, df in enumerate(reduced_df_dict.values())],
-            ignore_index=True
+            ignore_index=True,
         )
 
-        concatenated_df = pd.concat([df for df in reduced_df_dict.values()], ignore_index=True)
+        concatenated_df = pd.concat(
+            [df for df in reduced_df_dict.values()], ignore_index=True
+        )
         concatenated_ndarray = concatenated_df.to_numpy()
 
         return class_series, concatenated_ndarray
 
     def _visualize_2d(
-            self,
-            ndarray: np.ndarray,
-            class_series: pd.Series,
-            class_names: list[str]
+        self, ndarray: np.ndarray, class_series: pd.Series, class_names: list[str]
     ) -> Image.Image:
         """Return a 2D visualization image."""
 
@@ -58,9 +66,9 @@ class PcaVisualizer(VisualizerBase):
         )
 
         ax.set(
-            title="First two PCA dimensions",
-            xlabel="1st Eigenvector",
-            ylabel="2nd Eigenvector",
+            title=self.plot_title,
+            xlabel=self.projection_type + " 1",
+            ylabel=self.projection_type + " 2",
         )
         ax.set_xticklabels([])
         ax.set_yticklabels([])
@@ -75,17 +83,14 @@ class PcaVisualizer(VisualizerBase):
         )
 
         buf = io.BytesIO()
-        fig.savefig(buf, bbox_inches='tight', pad_inches=0.2)
+        fig.savefig(buf, bbox_inches="tight", pad_inches=0.2)
         buf.seek(0)
         img = Image.open(buf)
 
         return img
 
     def _visualize_3d(
-            self,
-            ndarray: np.ndarray,
-            class_series: pd.Series,
-            class_names: list[str]
+        self, ndarray: np.ndarray, class_series: pd.Series, class_names: list[str]
     ) -> Image.Image:
         """Return a 3D visualization image."""
 
@@ -101,10 +106,10 @@ class PcaVisualizer(VisualizerBase):
         )
 
         ax.set(
-            title="First three PCA dimensions",
-            xlabel="1st Eigenvector",
-            ylabel="2nd Eigenvector",
-            zlabel="3rd Eigenvector",
+            title=self.plot_title,
+            xlabel=self.projection_type + " 1",
+            ylabel=self.projection_type + " 2",
+            zlabel=self.projection_type + " 3",
         )
         ax.xaxis.set_ticklabels([])
         ax.yaxis.set_ticklabels([])
@@ -116,31 +121,29 @@ class PcaVisualizer(VisualizerBase):
             class_names,
             loc="outside left center",
             title="Classes",
-            bbox_to_anchor=(1, 1), # legend outside of plot
+            bbox_to_anchor=(1, 1),  # legend outside of plot
         )
 
         buf = io.BytesIO()
-        fig.savefig(buf, bbox_inches='tight', pad_inches=0.2)
+        fig.savefig(buf, bbox_inches="tight", pad_inches=0.2)
         buf.seek(0)
         img = Image.open(buf)
 
         return img
 
-    def get_visualization(self, reduced_df_dict: dict[str, pd.DataFrame]) -> Image.Image:
+    def get_visualization(
+        self, reduced_df_dict: dict[str, pd.DataFrame]
+    ) -> Image.Image:
         class_series, concated_ndarray = self._get_visualizable_form(reduced_df_dict)
 
         img = None
         if self.n_dims == 2:
             img = self._visualize_2d(
-                concated_ndarray,
-                class_series,
-                list(reduced_df_dict.keys())
+                concated_ndarray, class_series, list(reduced_df_dict.keys())
             )
         elif self.n_dims == 3:
             img = self._visualize_3d(
-                concated_ndarray,
-                class_series,
-                list(reduced_df_dict.keys())
+                concated_ndarray, class_series, list(reduced_df_dict.keys())
             )
 
         return img
