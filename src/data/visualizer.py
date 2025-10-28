@@ -23,10 +23,11 @@ class VisualizerBase(abc.ABC):
 
 class ProjectionVisualizer(VisualizerBase):
     """
-    Visualizer for reduced-dimensionality data. Uses 2D or 3D scatter plots. Uses Matplotlib for plotting.
+    Visualizer for low-dimensional data. Generates 2D or 3D scatterplots. Uses Matplotlib for plotting.
     args:
         n_dims (int): Number of dimensions for visualization (2 or 3).
         projection_type (str | None): Type of dimensionality reduction used (e.g., 'PCA', 't-SNE').
+            Currently only used for labeling axes.
         plot_title (str | None): Title for the plot
     """
 
