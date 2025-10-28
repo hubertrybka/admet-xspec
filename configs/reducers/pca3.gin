@@ -1,4 +1,7 @@
 PcaReducer.n_dims = 3
 
+# Optional: Title for the PCA plot (set to None for auto-generated title)
+PcaReducer.plot_title = None
+
 reducer/gin.singleton.constructor = @PcaReducer
 reducer = @explorer/gin.singleton()

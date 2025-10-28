@@ -2,5 +2,8 @@ UmapReducer.n_dims = 2
 UmapReducer.n_neighbors = 15
 UmapReducer.min_dist = 0.1
 
+# Optional: Title for the T-SNE plot (set to None for auto-generated title)
+UmapReducer.plot_title = None
+
 reducer/gin.singleton.constructor = @UmapReducer
 reducer = @explorer/gin.singleton()
