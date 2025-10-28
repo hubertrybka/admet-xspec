@@ -6,13 +6,14 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from umap import UMAP
 from src.data.visualizer import ProjectionVisualizer
+from typing import Dict, Any
 
 
 class ReducerBase(abc.ABC):
     """Dimensionality reduction class."""
 
-    def __init__(self):
-        self.model = self._init_model()
+    def __init__(self, params):
+        self.model = self._init_model(params)
         self.input_dir = None
         self.output_dir = None
 
@@ -21,7 +22,7 @@ class ReducerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _init_model(self):
+    def _init_model(self, params):
         """Initialize the model."""
         pass
 
@@ -33,8 +34,8 @@ class ReducerBase(abc.ABC):
 class ScikitReducerBase(ReducerBase):
     """Base class for scikit-learn based reducers."""
 
-    def __init__(self, n_dims: int = 2):
-        super().__init__()
+    def __init__(self, n_dims: int = 2, params: Dict[str, Any] = None):
+        super().__init__(params)
         self.visualizer = ProjectionVisualizer(n_dims=n_dims)
         self.n_dims = n_dims
         self.random_state = 42
@@ -60,13 +61,16 @@ class ScikitReducerBase(ReducerBase):
 class PcaReducer(ScikitReducerBase):
     """PCA reducer class."""
 
-    def __init__(self, n_dims: int = 2):
-        super().__init__(n_dims=n_dims)
-        self.model = self._init_model()
+    def __init__(self, n_dims: int = 2, random_state: int = 42):
+        params = {
+            "n_components": n_dims,
+            "random_state": random_state,
+        }
+        super().__init__(n_dims=n_dims, params=params)
 
-    def _init_model(self):
+    def _init_model(self, params):
         """Initialize the model."""
-        pca = PCA(n_components=self.n_dims, random_state=self.random_state)
+        pca = PCA(**params)
         return pca
 
 
@@ -74,20 +78,17 @@ class PcaReducer(ScikitReducerBase):
 class TsneReducer(ScikitReducerBase):
     """T-SNE reducer class."""
 
-    def __init__(self, n_dims: int = 2, perplexity: float = 30.0, max_iter: int = 1000):
-        super().__init__(n_dims=n_dims)
-        self.perplexity = perplexity
-        self.max_iter = max_iter
-        self.model = self._init_model()
+    def __init__(self, n_dims: int = 2, perplexity: float = 30.0, max_iter: int = 1000, random_state: int = 42):
+        params = {
+            "perplexity": perplexity,
+            "max_iter": max_iter,
+            "random_state": random_state,
+        }
+        super().__init__(n_dims=n_dims, params=params)
 
-    def _init_model(self):
+    def _init_model(self, params):
         """Initialize the model."""
-        tsne_model = TSNE(
-            n_components=self.n_dims,
-            random_state=self.random_state,
-            perplexity=self.perplexity,
-            max_iter=self.max_iter,
-        )
+        tsne_model = TSNE(**params)
         return tsne_model
 
 
@@ -95,18 +96,15 @@ class TsneReducer(ScikitReducerBase):
 class UmapReducer(ScikitReducerBase):
     """UMAP reducer class."""
 
-    def __init__(self, n_dims: int = 2, n_neighbors: int = 15, min_dist: float = 0.1):
-        super().__init__(n_dims=n_dims)
-        self.n_neighbors = n_neighbors
-        self.min_dist = min_dist
-        self.model = self._init_model()
+    def __init__(self, n_dims: int = 2, n_neighbors: int = 15, min_dist: float = 0.1, random_state: int = 42):
+        params = {
+            "n_neighbors": n_neighbors,
+            "min_dist": min_dist,
+            "random_state": random_state,
+        }
+        super().__init__(n_dims=n_dims, params=params)
 
-    def _init_model(self):
+    def _init_model(self, params):
         """Initialize the model."""
-        umap_model = UMAP(
-            n_components=self.n_dims,
-            random_state=self.random_state,
-            n_neighbors=self.n_neighbors,
-            min_dist=self.min_dist,
-        )
+        umap_model = UMAP(**params)
         return umap_model
