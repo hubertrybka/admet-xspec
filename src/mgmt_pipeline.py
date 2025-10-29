@@ -1,3 +1,4 @@
+from datetime import datetime
 import glob
 import pandas as pd
 from PIL import Image
@@ -100,6 +101,11 @@ class ManagementPipeline:
             ), "Either dataset categories or an explicit list must be specified, not both."
 
             self.dump_exploratory_visualization()
+
+    def save_operative_config(self, path: Path):
+        config = gin.operative_config_str()
+        with open(path, "w") as f:
+            f.write(config)
 
     @staticmethod
     def get_clean_smiles_df(df: pd.DataFrame, smiles_col: str) -> pd.DataFrame:
@@ -416,24 +422,44 @@ class ManagementPipeline:
 
         return visualization
 
-    def save_visualization(self, visualization: Image.Image):
-        """Take a visualization image and save it to visualization output dir."""
+    def save_visualization(self, visualization: Image.Image, with_params: bool):
+        """
+        Take a visualization image and save it to visualization output dir.
+        with_params: whether to dump an accompanying .log file with the operative config.
+        """
         vis_output_dir = Path(self.output_dir) / "visualizations"
 
         vis_output_dir.mkdir(parents=True, exist_ok=True)
 
         if self.explore_datasets_categories:
             categories_prefix = "_".join(
+                # first two letters of cat. name, eg: br (brain), li (liver)
                 [cat[:2] for cat in self.explore_datasets_categories]
             )
-            output_path = (
-                vis_output_dir
-                / f"{categories_prefix}_{self.featurizer.name}_visualization.png"
-            )
+
+            name_components = [
+                categories_prefix,
+                self.featurizer.name,
+                self.reducer.name,
+                self.reducer.get_unique_output_suffix(),
+            ]
+
+            output_path = vis_output_dir / ("_".join(name_components) + ".png")
         else:
-            output_path = vis_output_dir / f"{self.featurizer.name}_visualization.png"
+            name_components = [
+                self.featurizer.name,
+                self.reducer.name,
+                datetime.now().strftime(
+                    "%H-%M"
+                ),  # an alternative to v. specific filename or dir structure
+                self.reducer.get_unique_output_suffix(),
+            ]
+            output_path: Path = vis_output_dir / ("_".join(name_components) + ".png")
 
         visualization.save(output_path)
+        if with_params:
+            config_output_path = Path(output_path.stem + "_config.log")
+            self.save_operative_config(config_output_path)
 
     def dump_exploratory_visualization(self):
         """Go over what is to be visualized from .cfg and save it to disk."""
@@ -461,4 +487,4 @@ class ManagementPipeline:
 
         visualization = self.get_visualization(featurized_df_dict)
 
-        self.save_visualization(visualization)
+        self.save_visualization(visualization, with_params=True)

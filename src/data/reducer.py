@@ -12,13 +12,19 @@ from typing import Dict, Any
 class ReducerBase(abc.ABC):
     """Dimensionality reduction class."""
 
-    def __init__(self, params):
-        self.model = self._init_model(params)
+    def __init__(self, model_params, visualizer_params):
+        self.model = self._init_model(model_params)
+        self._init_visualizer(**visualizer_params)
         self.input_dir = None
         self.output_dir = None
 
     @abc.abstractmethod
-    def get_associated_visualizer(self):
+    def _init_model(self, params):
+        """Initialize the model."""
+        pass
+
+    @abc.abstractmethod
+    def _init_visualizer(self, **kwargs):
         pass
 
     @property
@@ -28,8 +34,11 @@ class ReducerBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _init_model(self, params):
-        """Initialize the model."""
+    def get_associated_visualizer(self):
+        pass
+
+    @abc.abstractmethod
+    def get_unique_output_suffix(self):
         pass
 
     @abc.abstractmethod
@@ -43,14 +52,28 @@ class ScikitReducerBase(ReducerBase):
     def __init__(
         self,
         n_dims: int = 2,
-        params: Dict[str, Any] = None,
+        model_params: Dict[str, Any] = None,
+        visualizer_params: Dict[str, Any] = None,
     ):
-        super().__init__(params)
-        self.visualizer = ProjectionVisualizer(n_dims=n_dims, projection_type=self.name)
+        self.n_dims = n_dims
+        self._init_visualizer(**visualizer_params)
+        super().__init__(model_params, visualizer_params)
+
+    @property
+    def name(self) -> str:
+        return "sck_reducer"
+
+    def _init_visualizer(self, **kwargs):
+        self.visualizer = ProjectionVisualizer(
+            n_dims=self.n_dims, projection_type=self.name, **kwargs
+        )
 
     def get_associated_visualizer(self):
         """Return the visualizer object for this reducer."""
         return self.visualizer
+
+    def get_unique_output_suffix(self) -> str:
+        return f"{self.n_dims}_dims"
 
     def get_reduced_df(self, df: pd.DataFrame) -> pd.DataFrame:
         """Perform PCA on a dataframe, return that dataframe with dim_1, ..., dim_n columns corr. to PCA"""
@@ -72,21 +95,29 @@ class PcaReducer(ScikitReducerBase):
     def __init__(
         self, n_dims: int = 2, random_state: int = 42, plot_title: str | None = None
     ):
-        params = {
+        model_params = {
             "n_components": n_dims,
             "random_state": random_state,
         }
-        super().__init__(n_dims=n_dims, params=params, plot_title=plot_title)
+        visualizer_params = {
+            "plot_title": plot_title,
+        }
+        self.n_dims = n_dims
+        self.random_state = random_state
+        super().__init__(n_dims, model_params, visualizer_params)
+
+    @property
+    def name(self) -> str:
+        """Name of the reducer."""
+        return "PCA"
 
     def _init_model(self, params):
         """Initialize the model."""
         pca = PCA(**params)
         return pca
 
-    @property
-    def name(self) -> str:
-        """Name of the reducer."""
-        return "PCA"
+    def get_unique_output_suffix(self) -> str:
+        return f"{self.n_dims}_dims"
 
 
 @gin.configurable
@@ -105,17 +136,24 @@ class TsneReducer(ScikitReducerBase):
             "max_iter": max_iter,
             "random_state": random_state,
         }
+        self.n_dims = n_dims
+        self.perplexity = perplexity
+        self.max_iter = max_iter
+        self.random_state = random_state
         super().__init__(n_dims=n_dims, params=params)
+
+    @property
+    def name(self) -> str:
+        """Name of the reducer."""
+        return "t-SNE"
 
     def _init_model(self, params):
         """Initialize the model."""
         tsne_model = TSNE(**params)
         return tsne_model
 
-    @property
-    def name(self) -> str:
-        """Name of the reducer."""
-        return "t-SNE"
+    def get_unique_output_suffix(self) -> str:
+        return f"{self.n_dims}_dims_{self.perplexity}_perpl"
 
 
 @gin.configurable
@@ -135,13 +173,19 @@ class UmapReducer(ScikitReducerBase):
             "random_state": random_state,
         }
         super().__init__(n_dims=n_dims, params=params)
+        self.n_neighbors = n_neighbors
+        self.min_dist = min_dist
+        self.random_state = random_state
+
+    @property
+    def name(self) -> str:
+        """Name of the reducer."""
+        return "UMAP"
 
     def _init_model(self, params):
         """Initialize the model."""
         umap_model = UMAP(**params)
         return umap_model
 
-    @property
-    def name(self) -> str:
-        """Name of the reducer."""
-        return "UMAP"
+    def get_unique_output_suffix(self) -> str:
+        return f"{self.n_dims}_{self.n_neighbors}_neigh"
