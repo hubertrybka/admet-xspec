@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import numpy as np
 from rdkit import DataStructs
 from rdkit.DataStructs import ExplicitBitVect
@@ -9,7 +9,7 @@ from src import FeaturizerBase
 class TanimotoCalculator:
     """Efficiently calculate Tanimoto distance between a query molecule and a set of molecules."""
 
-    def __init__(self, featurizer: FeaturizerBase, smiles_list: List[str]):
+    def __init__(self, featurizer: FeaturizerBase, smiles_list: List[str], return_closest_smiles: bool = False):
         """
         Initialize the calculator with a set of molecules.
 
@@ -20,6 +20,7 @@ class TanimotoCalculator:
         self.featurizer = featurizer
         self.smiles_list = smiles_list
         self.fingerprints = self.precompute_fingerprints(smiles_list)
+        self.return_closest_smiles = return_closest_smiles
 
     def run_single(self, query: str) -> dict:
         """
@@ -35,17 +36,23 @@ class TanimotoCalculator:
         distances = 1 - similarities
 
         q1, q2, q3 = np.percentile(distances, [25, 50, 75])
-
-        return {
-            "max_distance": float(np.max(distances)),
-            "min_distance": float(np.min(distances)),
-            "mean_distance": float(np.mean(distances)),
-            "q1_distance": float(q1),
-            "q2_distance": float(q2),
-            "q3_distance": float(q3),
+        stat_dict = {
+                "max_distance": float(np.max(distances)),
+                "min_distance": float(np.min(distances)),
+                "mean_distance": float(np.mean(distances)),
+                "q1_distance": float(q1),
+                "q2_distance": float(q2),
+                "q3_distance": float(q3),
         }
 
-    def run_batch(self, queries: List[str]) -> dict[List[float]]:
+        if self.return_closest_smiles:
+            min_index = int(np.argmin(distances))
+            stat_dict["query_smile"] = query
+            stat_dict["closest_smile"] = self.smiles_list[min_index]
+
+        return stat_dict
+
+    def run_batch(self, queries: List[str]) -> dict:
         """
         Calculate Tanimoto distances for a batch of query molecules.
         Args:
@@ -60,12 +67,18 @@ class TanimotoCalculator:
             "q1_distance": [],
             "q2_distance": [],
             "q3_distance": [],
+            "query_smile": [],
+            "closest_smile": [],
         }
 
         for query in queries:
             stats = self.run_single(query)
             for key in results.keys():
                 results[key].append(stats[key])
+
+        if not self.return_closest_smiles:
+            results.pop("closest_smile")
+            results.pop("query_smile")
 
         return results
 
