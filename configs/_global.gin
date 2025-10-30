@@ -1,1 +1,1 @@
-root_categories = ["AChE", "brain", "liver", "MAO-A", "BBBP"]
+ROOT_CATEGORIES = ["AChE", "brain", "liver", "MAO-A"]
