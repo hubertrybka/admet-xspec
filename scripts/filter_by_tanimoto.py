@@ -3,7 +3,6 @@ import pathlib
 import argparse
 import logging
 from src.data.tanimoto import TanimotoCalculator
-from src.data.featurizer import EcfpFeaturizer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -72,10 +71,7 @@ if __name__ == "__main__":
     )
 
     # initialize tanimoto calculator
-    featurizer = EcfpFeaturizer(radius=2, n_bits=2048)
-    tanimoto_calculator = TanimotoCalculator(
-        featurizer=featurizer, smiles_list=list(test_smiles)
-    )
+    tanimoto_calculator = TanimotoCalculator(smiles_list=list(test_smiles))
 
     # collect all .csv files in the directory where the test set is located, except the test set itself
     all_files = list(dir.glob("*.csv"))
