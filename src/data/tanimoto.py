@@ -1,18 +1,19 @@
-from typing import List, Tuple
+from typing import List
 import numpy as np
 from rdkit import DataStructs
 from rdkit.DataStructs import ExplicitBitVect
-
-from src import FeaturizerBase
+from src.data.featurizer import FeaturizerBase, EcfpFeaturizer
 
 
 class TanimotoCalculator:
-    """Efficiently calculate Tanimoto distance between a query molecule and a set of molecules."""
+    """Efficiently calculate Tanimoto distance between a query molecule and a set of molecules.
+    Uses ECFP4 fingerprints by default, but can be configured to use any featurizer compatible with FeaturizerBase.
+    """
 
     def __init__(
         self,
-        featurizer: FeaturizerBase,
         smiles_list: List[str],
+        featurizer: FeaturizerBase | None = None,
         return_closest_smiles: bool = False,
     ):
         """
@@ -21,7 +22,10 @@ class TanimotoCalculator:
             featurizer: An instance of FeaturizerBase to compute fingerprints
             smiles_list: List of SMILES strings representing the molecules to compare against
         """
-        self.featurizer = featurizer
+        if featurizer is None:
+            self.featurizer = EcfpFeaturizer(n_bits=1024, radius=2)
+        else:
+            self.featurizer = featurizer
         self.smiles_list = smiles_list
         self.fingerprints = self.precompute_fingerprints(smiles_list)
         self.return_closest_smiles = return_closest_smiles
