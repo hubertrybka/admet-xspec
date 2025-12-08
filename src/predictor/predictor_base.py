@@ -98,7 +98,7 @@ class PredictorBase(abc.ABC):
             "rmse": metrics.root_mean_squared_error,
         }
         if metric_name not in metrics_dict.keys():
-            raise ValueError
+            raise ValueError(f"Invalid metric name: '{metric_name}'. Supported metrics: {list(metrics_dict.keys())}")
         return metrics_dict[metric_name]
 
 class BinaryClassifierBase(PredictorBase, ABC):
