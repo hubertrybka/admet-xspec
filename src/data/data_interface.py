@@ -81,7 +81,6 @@ class DataInterface:
                 contents = fh.read()
             path.mkdir(parents=True, exist_ok=True)
             with open(path / self.console_log_filename, "w") as fh:
-
                 fh.write(contents)
 
     def dump_gin_config(self, path: Path) -> None:
