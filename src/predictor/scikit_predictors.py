@@ -264,6 +264,8 @@ class LightGbmRegressor(ScikitPredictorBase, RegressorBase):
 # Helper function to validate LightGBM parameters
 
 def validate_lgbm_specific_params(params: dict):
+    if params is None:
+        return
     if 'max_depth' in params and 'num_leaves' in params and params['max_depth'] != -1:
         max_depth = params['max_depth']
         num_leaves = params['num_leaves']
