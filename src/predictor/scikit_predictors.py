@@ -254,7 +254,7 @@ class LightGbmRegressor(ScikitPredictorBase, RegressorBase):
         )
 
     def _init_model(self):
-        return lgb.LGBMRegressor()
+        return lgb.LGBMRegressor(random_state=self.random_state)
 
     @property
     def name(self) -> str:
