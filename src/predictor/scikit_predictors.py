@@ -201,7 +201,7 @@ class LightGbmClassifier(ScikitPredictorBase, BinaryClassifierBase):
         n_jobs: int | None = None,
         random_state: int = 42,
     ):
-        self._validate_predictor_specific_params(params)
+        validate_lgbm_specific_params(params)
         super().__init__(
             params=params,
             target_metric=target_metric,
@@ -242,7 +242,7 @@ class LightGbmRegressor(ScikitPredictorBase, RegressorBase):
             n_jobs: int | None = None,
             random_state: int = 42,
     ):
-        self._validate_predictor_specific_params(params)
+        validate_lgbm_specific_params(params)
         super().__init__(
             params=params,
             target_metric=target_metric,
@@ -260,12 +260,14 @@ class LightGbmRegressor(ScikitPredictorBase, RegressorBase):
     def name(self) -> str:
         return "LightGBM_reg"
 
-    @staticmethod
-    def _validate_predictor_specific_params(params: dict):
-        if 'max_depth' in params and 'num_leaves' in params and params['max_depth'] != -1:
-            max_depth = params['max_depth']
-            num_leaves = params['num_leaves']
-            if num_leaves > 2 ** max_depth:
-                logging.warning(
-                    f"WARNING: num_leaves ({num_leaves}) should not be greater than 2^max_depth ({2 ** max_depth}). Adjusting num_leaves to {2 ** max_depth}."
-                )
+
+# Helper function to validate LightGBM parameters
+
+def validate_lgbm_specific_params(params: dict):
+    if 'max_depth' in params and 'num_leaves' in params and params['max_depth'] != -1:
+        max_depth = params['max_depth']
+        num_leaves = params['num_leaves']
+        if num_leaves > 2 ** max_depth:
+            logging.warning(
+                f"WARNING: num_leaves ({num_leaves}) should not be greater than 2^max_depth ({2 ** max_depth}). Adjusting num_leaves to {2 ** max_depth}."
+            )
