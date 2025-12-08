@@ -1,4 +1,4 @@
-LightGbmRegressor.target_metric = 'roc_auc'
+LightGbmRegressor.target_metric = 'neg_mean_squared_error'
 LightGbmRegressor.optimization_iterations = 100    # maximum times the script is allowed to draw and
                                                     # evaluate a new set of hyperparameter values
 
