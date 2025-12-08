@@ -129,5 +129,5 @@ class ScikitPredictorBase(abc.ABC):
         model_params = self.model.get_params()
         for key in params:
             if key not in model_params:
-                raise ValueError(f"Model {self.model.__class__.__name__} does not accept hyperparameter `{key}`.\n Supported hyperparameters: {list(model_params.keys())}")
+                raise ValueError(f"Model {self.model.__class__.__name__} does not accept hyperparameter `{key}`. Supported hyperparameters: {list(model_params.keys())}")
         self.model.set_params(**params)
