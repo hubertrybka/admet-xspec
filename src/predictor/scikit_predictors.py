@@ -221,6 +221,8 @@ class LightGbmClassifier(ScikitPredictorBase, BinaryClassifierBase):
 
     @staticmethod
     def _validate_predictor_specific_params(params: dict):
+        if params is None:
+            return
         if 'max_depth' in params and 'num_leaves' in params:
             max_depth = params['max_depth']
             num_leaves = params['num_leaves']
@@ -262,6 +264,8 @@ class LightGbmRegressor(ScikitPredictorBase, RegressorBase):
 
     @staticmethod
     def _validate_predictor_specific_params(params: dict):
+        if params is None:
+            return
         if 'max_depth' in params and 'num_leaves' in params and 'max_depth' != -1:
             max_depth = params['max_depth']
             num_leaves = params['num_leaves']
