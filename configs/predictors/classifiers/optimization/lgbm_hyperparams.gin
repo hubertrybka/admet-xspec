@@ -1,5 +1,5 @@
 LightGbmClassifier.target_metric = 'roc_auc'
-LightGbmClassifier.optimization_iterations = 100    # maximum times the script is allowed to draw and
+LightGbmClassifier.optimization_iterations = 2    # maximum times the script is allowed to draw and
                                                     # evaluate a new set of hyperparameter values
 
 LightGbmClassifier.n_jobs = -1                      # number of CPUs to use (-1 for all available)
@@ -7,7 +7,6 @@ LightGbmClassifier.n_folds = 5                      # number of cross-validation
 
 
 LightGbmClassifier.params_distribution = {
-    'boosting_type': 'gbdt',
     'n_estimators': @n_estimators/QLogUniform(),
     'max_depth': @max_depth/QUniform(),
     'num_leaves': @num_leaves/QUniform(),
