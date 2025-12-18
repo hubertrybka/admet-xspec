@@ -63,10 +63,13 @@ class PredictorBase(abc.ABC):
 
     def get_featurizer(self) -> FeaturizerBase | None:
         """Return the featurizer if set."""
-        return self.featurizer if self.featurizer else None
+        return self.featurizer if not self.uses_internal_featurizer else None
 
     def set_featurizer(self, featurizer: FeaturizerBase):
         """Inject featurizer into the model."""
+        assert (
+            not self.uses_internal_featurizer
+        ), "Cannot inject featurizer into model which uses one internally"
         assert isinstance(
             featurizer, FeaturizerBase
         ), "Featurizer must be an instance of FeaturizerBase"
@@ -98,13 +101,16 @@ class PredictorBase(abc.ABC):
             "rmse": metrics.root_mean_squared_error,
         }
         if metric_name not in metrics_dict.keys():
-            raise ValueError(f"Invalid metric name: '{metric_name}'. Supported metrics: {list(metrics_dict.keys())}")
+            raise ValueError(
+                f"Invalid metric name: '{metric_name}'. Supported metrics: {list(metrics_dict.keys())}"
+            )
         return metrics_dict[metric_name]
+
 
 class BinaryClassifierBase(PredictorBase, ABC):
     evaluation_metrics = ["accuracy", "roc_auc", "f1", "precision", "recall"]
     """
-    Base class for binary classification predictors. Implements common evaluation metrics 
+    Base class for binary classification predictors. Implements common evaluation metrics
     and classification thresholding.
     """
 
@@ -130,6 +136,7 @@ class BinaryClassifierBase(PredictorBase, ABC):
     def class_threshold(self) -> float:
         """Return the classification threshold value. Default is 0.5."""
         return 0.5
+
 
 class RegressorBase(PredictorBase, ABC):
     evaluation_metrics = ["mse", "rmse", "mae", "r2"]

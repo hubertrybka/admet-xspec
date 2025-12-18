@@ -1,27 +1,33 @@
+import abc
 import logging
-from src.predictor.predictor_base import PredictorBase
+from typing import List
+import torch
+import gin
+import numpy as np
+
 import chemprop as chp
 from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
+
 import ray
-from typing import List
 from ray.train import ScalingConfig
 from ray import tune
 from ray.train.torch import TorchTrainer
-from src.gin_config.distributions import Uniform, LogUniform, QUniform, QLogUniform
 from ray.tune.search.hyperopt import HyperOptSearch
 from ray.tune.schedulers import FIFOScheduler
-import numpy as np
+
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
-import torch
-import gin
+
+from src.predictor import BinaryClassifierBase, RegressorBase
+from src.predictor.predictor_base import PredictorBase
+from src.gin_config.distributions import Uniform, LogUniform, QUniform, QLogUniform
 
 
-class ChempropPredictor(PredictorBase):
+class ChempropPredictor(abc.ABC):
     def __init__(
         self,
-        featurizer: chp.featurizers.Featurizer,
+        internal_featurizer: chp.featurizers.Featurizer,
         n_workers: int,
         optimize_hyperparameters: bool,
         params_distribution: dict,
@@ -41,8 +47,14 @@ class ChempropPredictor(PredictorBase):
         :param epochs: number of epochs for training
         :param use_gpu: whether to use GPU for training
         """
+        super().__init__()
+
         self.params = params
-        self.featurizer = featurizer
+        self.best_params = None
+
+        self._internal_featurizer = internal_featurizer
+        self.featurizer = None
+
         self.num_workers = n_workers
         self.optimize_hyperparameters = optimize_hyperparameters
         self.params_distribution = self.process_param_distribution_dict(
@@ -51,8 +63,8 @@ class ChempropPredictor(PredictorBase):
         self.n_tries = optimization_iterations
         self.epochs = epochs
         self.use_gpu = use_gpu
-        super(ChempropPredictor, self).__init__(task="classification")
 
+    @abc.abstractmethod
     def _init_ffn(self, num_layers: int, hidden_dim: int):
         """
         Initialize the feed forward network (FFN) for the model, as defined in the ChemProp library.
@@ -60,7 +72,7 @@ class ChempropPredictor(PredictorBase):
         FFN is different for regression and classification tasks.
         :return: FFN object, as defined in the ChemProp library
         """
-        raise NotImplementedError()
+        pass
 
     def train(self, smiles_list: List[str], target_list: List[float]):
         """
@@ -69,15 +81,14 @@ class ChempropPredictor(PredictorBase):
         :param smiles_list: List of SMILES strings
         :param target_list: List of target values
         """
-        if self.optimize_hyperparameters:
-            # If hyperparameter optimization is enabled, call the train_optimize method
-            self._train_optimize(smiles_list, target_list)
-        else:
-            # Otherwise, call the regular train method
-            self._train_once(smiles_list, target_list)
+        self._train_once(smiles_list, target_list)
 
+        # TODO: remove?
         # Raise the ready flag
-        self._ready()
+        # self._ready()
+
+    def optimize(self, smiles_list: List[str], target_list: List[float]):
+        self._train_optimize(smiles_list, target_list)
 
     def _train_once(
         self, smiles_list: List[str], target_list: List[float], config=None
@@ -122,7 +133,9 @@ class ChempropPredictor(PredictorBase):
 
         # Scaling config controls the resources used by Ray
         scaling_config = ScalingConfig(
-            num_workers=1 if self.use_gpu else num_workers,  # number of workers to use
+            num_workers=(
+                1 if self.use_gpu else self.num_workers
+            ),  # number of workers to use
             use_gpu=self.use_gpu,  # change to True if you want to use GPU
         )
 
@@ -173,17 +186,36 @@ class ChempropPredictor(PredictorBase):
         # Log hyperparameters of the best model
         best_result = results.get_best_result()
         best_config = best_result.config
+        best_hyperparameters = best_config["train_loop_config"]
         logging.info(
             "Hyperparameter search finished successfully. Best model's hyperparameters:"
         )
-        logging.info(best_config["train_loop_config"])
+        logging.info(best_hyperparameters)
 
+        self.best_params = best_hyperparameters
+        self.params = self.best_params
+
+        # TODO: remove?
         # Raise the ready flag
-        self._ready()
+        # self._ready()
 
-    def predict(self, smiles_list: List[str]) -> np.array:
+    def get_hyperparameters(self) -> dict[str, object]:
+        if self.best_params is None:
+            return {
+                k: (v.item() if isinstance(v, np.generic) else v)
+                for k, v in self.params.items()
+            }
+        logging.info(
+            "Model was trained with hyperparameter optimization, returning tuner.fit().get_best_result().config['train_loop_config']."
+        )
+        return self.best_params
+
+    def set_hyperparameters(self, hyperparams: dict):
+        self.params = hyperparams
+
+    def predict(self, smiles_list: List[str]) -> List[float]:
         datapoints = [chp.data.MoleculeDatapoint.from_smi(smi) for smi in smiles_list]
-        dataset = chp.data.MoleculeDataset(datapoints, self.featurizer)
+        dataset = chp.data.MoleculeDataset(datapoints, self._internal_featurizer)
         loader = chp.data.build_dataloader(
             dataset, num_workers=self.num_workers, shuffle=False
         )
@@ -192,7 +224,7 @@ class ChempropPredictor(PredictorBase):
             trainer = pl.Trainer(logger=None, enable_progress_bar=True, devices=1)
             preds = trainer.predict(self.model, loader)
             preds = torch.cat(preds, dim=0).cpu().numpy()
-            return np.array(preds).reshape(-1, 1)
+            return list(np.array(preds).reshape(-1, 1))
 
     @staticmethod
     def _init_mp(mp_type: str, d_h: int, depth: int):
@@ -288,8 +320,8 @@ class ChempropPredictor(PredictorBase):
         )
 
         # Create the datasets
-        train_dset = chp.data.MoleculeDataset(train_data[0], self.featurizer)
-        val_dset = chp.data.MoleculeDataset(val_data[0], self.featurizer)
+        train_dset = chp.data.MoleculeDataset(train_data[0], self._internal_featurizer)
+        val_dset = chp.data.MoleculeDataset(val_data[0], self._internal_featurizer)
 
         # Create the dataloaders
         train_loader = chp.data.build_dataloader(
@@ -322,10 +354,10 @@ class ChempropPredictor(PredictorBase):
 
 
 @gin.configurable
-class ChempropRegressor(ChempropPredictor):
+class ChempropRegressor(RegressorBase, ChempropPredictor):
     def __init__(
         self,
-        featurizer: (
+        internal_featurizer: (
             chp.featurizers.Featurizer | None
         ) = SimpleMoleculeMolGraphFeaturizer(),
         n_workers: int = 1,
@@ -336,8 +368,8 @@ class ChempropRegressor(ChempropPredictor):
         epochs: int = 100,
         use_gpu: bool = True,
     ):
-        super(ChempropRegressor, self).__init__(
-            featurizer=featurizer,
+        super().__init__(
+            internal_featurizer=internal_featurizer,
             n_workers=n_workers,
             optimize_hyperparameters=optimize_hyperparameters,
             params_distribution=params_distribution,
@@ -346,16 +378,22 @@ class ChempropRegressor(ChempropPredictor):
             epochs=epochs,
             use_gpu=use_gpu,
         )
+
+    def name(self) -> str:
+        return "CP_regr"
+
+    def uses_internal_featurizer(self) -> bool:
+        return True
 
     def _init_ffn(self, num_layers: int, hidden_dim: int):
         return chp.nn.RegressionFFN(hidden_dim=hidden_dim, n_layers=num_layers)
 
 
 @gin.configurable
-class ChempropBinaryClassifier(ChempropPredictor):
+class ChempropBinaryClassifier(BinaryClassifierBase, ChempropPredictor):
     def __init__(
         self,
-        featurizer: (
+        internal_featurizer: (
             chp.featurizers.Featurizer | None
         ) = SimpleMoleculeMolGraphFeaturizer(),
         n_workers: int = 1,
@@ -366,8 +404,8 @@ class ChempropBinaryClassifier(ChempropPredictor):
         epochs: int = 100,
         use_gpu: bool = True,
     ):
-        super(ChempropBinaryClassifier, self).__init__(
-            featurizer=featurizer,
+        super().__init__(
+            internal_featurizer=internal_featurizer,
             n_workers=n_workers,
             optimize_hyperparameters=optimize_hyperparameters,
             params_distribution=params_distribution,
@@ -376,6 +414,12 @@ class ChempropBinaryClassifier(ChempropPredictor):
             epochs=epochs,
             use_gpu=use_gpu,
         )
+
+    def name(self) -> str:
+        return "CP_clf"
+
+    def uses_internal_featurizer(self) -> bool:
+        return True
 
     def _init_ffn(self, num_layers: int, hidden_dim: int):
         return chp.nn.BinaryClassificationFFN(
