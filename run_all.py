@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     # Run each configuration file using the process_data.py script
     for config_file in config_files:
-        command = f"python process_data.py {config_file}"
+        command = f"python process_data.py --cfg {config_file}"
         print(f"Running command: {command}")
         subprocess.run(command, shell=True, check=True)
     print("All configurations have been processed.")
