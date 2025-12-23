@@ -36,6 +36,7 @@ class ProcessingPipeline:
         do_load_optimized_hyperparams: bool,
         do_optimize_hyperparams: bool,
         do_train_model: bool,
+        do_save_trained_model: bool,
         do_refit_final_model: bool,
         # Core components
         data_interface: DataInterface,
@@ -66,6 +67,7 @@ class ProcessingPipeline:
         self.do_load_optimized_hyperparams = do_load_optimized_hyperparams
         self.do_optimize_hyperparams = do_optimize_hyperparams
         self.do_train_model = do_train_model
+        self.do_save_trained_model = do_save_trained_model
         self.do_refit_final_model = do_refit_final_model
 
         # Core components and settings
@@ -131,7 +133,7 @@ class ProcessingPipeline:
             if self.do_visualize_train_test:
                 self._visualize_splits(train_df, test_df)
 
-        # Update registries regardless of train/test decisions
+        # Update registries
         self._update_registries()
 
         # Step 6: Load optimized hyperparameters if requested
@@ -147,9 +149,17 @@ class ProcessingPipeline:
             self._train(train_df)
             self._evaluate(test_df)
 
+            # Pickle the trained model if requested
+            if self.do_save_trained_model:
+                self._pickle_trained_model(as_refit=False)
+
             # Step 9: Refit final model on full dataset if requested
             if self.do_refit_final_model:
                 self._train_final_model(train_df, test_df)
+
+            # Pickle the refitted model if requested
+            if self.do_save_trained_model:
+                self._pickle_trained_model(as_refit=True)
 
             self._dump_training_info()
 
@@ -464,9 +474,6 @@ class ProcessingPipeline:
 
         self.predictor.train(X_train, y_train)
 
-        # Save trained model
-        self.data_interface.pickle_model(self.predictor, self.predictor_key, self.split_key)
-
         # Save hyperparameters
         hyperparams = self.predictor.get_hyperparameters()
         self.data_interface.save_hyperparams(hyperparams, self.predictor_key, self.split_key)
@@ -485,6 +492,13 @@ class ProcessingPipeline:
             "Optimized Hyperparameters": self.do_optimize_hyperparams,
         }
         self.data_interface.save_model_metadata(metadata_dict, self.predictor_key, self.split_key)
+
+    def _pickle_trained_model(self, as_refit=False) -> None:
+        """Save the trained model."""
+        if not self.predictor:
+            raise ValueError("No predictor configured; cannot pickle model")
+
+        self.data_interface.pickle_model(self.predictor, self.predictor_key, self.split_key, save_as_refit=as_refit)
 
     def _evaluate(self, test_df: pd.DataFrame) -> None:
         """Evaluate trained predictor, log metrics and persist them."""
@@ -510,7 +524,6 @@ class ProcessingPipeline:
         X_full = full_df[self.smiles_col].tolist()
         y_full = full_df[self.target_col].tolist()
         self.predictor.train(X_full, y_full)
-        self.data_interface.pickle_model(self.predictor, self.predictor_key, self.split_key, save_as_refit=True)
 
     def _dump_training_info(self) -> None:
         self.data_interface.dump_training_logs(self.predictor_key, self.split_key)
