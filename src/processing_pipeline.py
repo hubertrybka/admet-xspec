@@ -472,7 +472,7 @@ class ProcessingPipeline:
         self.data_interface.save_hyperparams(hyperparams, self.predictor_key, self.split_key)
 
         # Save model metadata
-        metadata_dict = metadata_dict = {
+        metadata_dict = {
             "Datasets": self.datasets,
             "Test Origin Dataset": self.test_origin_dataset,
             "Training set size": len(train_df),
