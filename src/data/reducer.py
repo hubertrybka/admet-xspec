@@ -10,7 +10,20 @@ from typing import Dict, Any
 
 
 class ReducerBase(abc.ABC):
-    """Dimensionality reduction class."""
+    """
+    Base class for dimensionality reduction algorithms.
+
+    Provides abstract interface for reducing high-dimensional molecular feature spaces
+    to lower dimensions for visualization or analysis.
+
+    :param params: Configuration parameters for the reduction algorithm
+    :type params: Dict[str, Any]
+    :ivar model: The initialized reduction model
+    :ivar input_dir: Directory for input data (optional)
+    :type input_dir: Path or None
+    :ivar output_dir: Directory for output data (optional)
+    :type output_dir: Path or None
+    """
 
     def __init__(self, params):
         self.model = self._init_model(params)
@@ -19,26 +32,55 @@ class ReducerBase(abc.ABC):
 
     @abc.abstractmethod
     def get_associated_visualizer(self):
+        """
+        Return the visualizer object for this reducer.
+
+        :return: Visualizer instance compatible with this reducer's output
+        :rtype: Visualizer
+        """
         pass
 
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """Name of the reducer."""
-        pass
+        """
+        Name of the reducer.
 
-    @abc.abstractmethod
-    def _init_model(self, params):
-        """Initialize the model."""
+        :return: Human-readable algorithm name (e.g., 'PCA', 'UMAP')
+        :rtype: str
+        """
         pass
 
     @abc.abstractmethod
     def get_reduced_df(self, df: pd.DataFrame):
+        """
+        Apply dimensionality reduction to DataFrame.
+
+        :param df: DataFrame with high-dimensional features
+        :type df: pd.DataFrame
+        :return: DataFrame with reduced dimensions
+        :rtype: pd.DataFrame
+        """
+        pass
+
+    @abc.abstractmethod
+    def _init_model(self, params):
         pass
 
 
 class ScikitReducerBase(ReducerBase):
-    """Base class for scikit-learn based reducers."""
+    """
+    Base class for scikit-learn based dimensionality reducers.
+
+    :param n_dims: Number of dimensions in reduced space
+    :type n_dims: int
+    :param params: Algorithm-specific parameters
+    :type params: Dict[str, Any] or None
+    :param plot_title: Title for visualization plots
+    :type plot_title: str or None
+    :ivar visualizer: ProjectionVisualizer instance for this reducer
+    :type visualizer: ProjectionVisualizer
+    """
 
     def __init__(
         self,
@@ -52,11 +94,26 @@ class ScikitReducerBase(ReducerBase):
         )
 
     def get_associated_visualizer(self):
-        """Return the visualizer object for this reducer."""
+        """
+        Return the visualizer object for this reducer.
+
+        :return: ProjectionVisualizer configured for this reducer's output
+        :rtype: ProjectionVisualizer
+        """
         return self.visualizer
 
     def get_reduced_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Perform PCA on a dataframe, return that dataframe with dim_1, ..., dim_n columns corr. to PCA"""
+        """
+        Fit reducer and transform DataFrame to lower dimensional space.
+
+        Creates new DataFrame with columns 'dim_1', 'dim_2', ..., 'dim_n' containing
+        the reduced feature vectors.
+
+        :param df: DataFrame with high-dimensional features (each column is a feature)
+        :type df: pd.DataFrame
+        :return: DataFrame with n_dims columns representing reduced space
+        :rtype: pd.DataFrame
+        """
         reduced_data_ndarray = self.model.fit_transform(df)
         reduced_df = pd.DataFrame(
             {

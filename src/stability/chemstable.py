@@ -5,7 +5,26 @@ import subprocess
 
 
 class DeepChemStableWrapper:
-    """Wrapper for DeepChemStable to predict chemical stability from SMILES strings."""
+    """
+    Wrapper for DeepChemStable chemical stability prediction.
+
+    Provides interface to external DeepChemStable tool for predicting molecular
+    stability from SMILES strings. Handles conda environment execution, temporary
+    file management, and output parsing.
+
+    :param dcs_path: Path to DeepChemStable installation directory
+    :type dcs_path: str
+    :param conda_env: Name of conda environment with DeepChemStable dependencies
+    :type conda_env: str
+    :ivar dcs_path: Path to DeepChemStable directory
+    :type dcs_path: pathlib.Path
+    :ivar dcs_figures: Path to DeepChemStable figures directory
+    :type dcs_figures: pathlib.Path
+    :ivar dcs_conda_env: Name of conda environment
+    :type dcs_conda_env: str
+    :ivar dcs_output_file: Path where DeepChemStable writes results
+    :type dcs_output_file: pathlib.Path
+    """
 
     def __init__(self, dcs_path="external/DeepChemStable", conda_env="stable"):
         self.dcs_path = pathlib.Path(dcs_path)
@@ -15,6 +34,20 @@ class DeepChemStableWrapper:
         self._check_dcs_directory()
 
     def predict(self, smiles_list):
+        """
+        Predict chemical stability for molecules.
+
+        Executes DeepChemStable via conda environment, processes input SMILES,
+        and parses output predictions. Uses temporary file for input to avoid
+        conflicts.
+
+        :param smiles_list: List of SMILES strings to predict
+        :type smiles_list: List[str]
+        :return: DataFrame with stability predictions and original SMILES
+        :rtype: pd.DataFrame
+        :raises RuntimeError: If DeepChemStable execution fails
+        :raises FileNotFoundError: If DeepChemStable output file not created
+        """
 
         # Prepare the input file
         with tempfile.NamedTemporaryFile(

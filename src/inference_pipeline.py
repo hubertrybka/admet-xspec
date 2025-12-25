@@ -15,6 +15,27 @@ import json
 
 @gin.configurable
 class InferencePipeline:
+    """
+    Pipeline for loading trained models and generating predictions on new data.
+
+    Handles model loading, data preparation, prediction generation, and optional
+    evaluation when ground truth labels are available.
+
+    :param model_path: Path to serialized model file
+    :type model_path: Path or str
+    :param data_path: Path to input CSV file with SMILES
+    :type data_path: Path or str
+    :param task_name: Name for output directory
+    :type task_name: str
+    :ivar model: Loaded predictor instance
+    :type model: PredictorBase
+    :ivar data_path: Path to input data file
+    :type data_path: Path
+    :ivar out_dir: Directory for saving predictions and metrics
+    :type out_dir: Path
+    :ivar data: Prepared DataFrame with SMILES and validity flags
+    :type data: pd.DataFrame
+    """
 
     def __init__(
         self,
@@ -32,6 +53,17 @@ class InferencePipeline:
         self.data = self._prepare_data(data_path)
 
     def predict(self):
+        """
+        Generate predictions for valid SMILES in dataset.
+
+        Filters to valid SMILES, runs model prediction, optionally generates class
+        labels (for classifiers), and saves results to CSV. Invalid SMILES receive
+        NaN predictions.
+
+        Output saved to: {out_dir}/predictions.csv
+
+        :rtype: None
+        """
 
         # Select only valid SMILES for prediction
         valid_data = self.data[self.data["is_valid"]]
@@ -60,6 +92,18 @@ class InferencePipeline:
         logging.info(f"Predictions saved to {results_path}")
 
     def evaluate(self):
+        """
+        Evaluate model performance on data with ground truth labels.
+
+        Computes metrics using model's evaluate() method, logs results in markdown
+        format, and saves metrics to JSON file.
+
+        Output saved to: {out_dir}/metrics.json
+
+        :rtype: None
+        :raises KeyError: If 'y' column not present in data (check with can_compute_metrics first)
+        """
+
         valid_data = self.data[self.data["is_valid"]]
         X = valid_data["smiles"].tolist()
         y_true = valid_data["y"].tolist()
@@ -77,6 +121,13 @@ class InferencePipeline:
             json.dump(metrics, f)
 
     def can_compute_metrics(self):
+        """
+        Check if ground truth labels are available for evaluation.
+
+        :return: True if 'y' column exists in data, False otherwise
+        :rtype: bool
+        """
+
         if "y" not in self.data.columns:
             logging.debug("No target column 'y' in the data - cannot compute metrics.")
             return False

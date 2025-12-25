@@ -8,16 +8,48 @@ import numpy as np
 
 
 class VisualizerBase(abc.ABC):
+    """
+    Base class for data visualizers.
+
+    Provides abstract interface for converting datasets into visual representations.
+    Subclasses implement specific visualization strategies (e.g., 2D/3D projections,
+    distribution plots).
+
+    :ivar input_dir: Directory for input data (optional)
+    :type input_dir: Path or None
+    :ivar output_dir: Directory for output visualizations (optional)
+    :type output_dir: Path or None
+    """
+
     def __init__(self):
         self.input_dir = None
         self.output_dir = None
 
     @abc.abstractmethod
     def _get_visualizable_form(self, dataset_dict: dict):
+        """
+        Convert dataset dictionary to format suitable for visualization.
+
+        Transforms input data structure into arrays or series that can be
+        passed to plotting functions.
+
+        :param dataset_dict: Dictionary mapping dataset names to their data
+        :type dataset_dict: dict
+        :return: Data in format ready for plotting (implementation-specific)
+        :rtype: tuple or other visualization-ready format
+        """
         pass
 
     @abc.abstractmethod
     def get_visualization(self, dataset_dict: dict):
+        """
+        Generate visualization from dataset dictionary.
+
+        :param dataset_dict: Dictionary mapping dataset names to their data
+        :type dataset_dict: dict
+        :return: Generated visualization (e.g., PIL Image, matplotlib Figure)
+        :rtype: Image.Image or other visualization object
+        """
         pass
 
 
@@ -45,7 +77,17 @@ class ProjectionVisualizer(VisualizerBase):
     def _get_visualizable_form(
         self, reduced_df_dict: dict[str, pd.DataFrame]
     ) -> tuple[pd.Series, np.ndarray]:
-        """Convert reduced-dimensionality dataframes into form that can be fed into plt."""
+        """
+        Convert reduced-dimensionality DataFrames to plotting format.
+
+        Concatenates multiple DataFrames and creates a class label series for
+        color-coding points by dataset origin.
+
+        :param reduced_df_dict: Dictionary mapping dataset names to reduced DataFrames
+        :type reduced_df_dict: dict[str, pd.DataFrame]
+        :return: Tuple of (class labels for each point, concatenated coordinate array)
+        :rtype: tuple[pd.Series, np.ndarray]
+        """
         class_series = pd.concat(
             [pd.Series([i] * len(df)) for i, df in enumerate(reduced_df_dict.values())],
             ignore_index=True,
@@ -61,7 +103,18 @@ class ProjectionVisualizer(VisualizerBase):
     def _visualize_2d(
         self, ndarray: np.ndarray, class_series: pd.Series, class_names: list[str]
     ) -> Image.Image:
-        """Return a 2D visualization image."""
+        """
+        Generate 2D scatter plot.
+
+        :param ndarray: Array of shape (n_samples, 2) with point coordinates
+        :type ndarray: np.ndarray
+        :param class_series: Class label for each point (used for coloring)
+        :type class_series: pd.Series
+        :param class_names: Names for legend (one per unique class)
+        :type class_names: list[str]
+        :return: Rendered plot as PIL Image
+        :rtype: Image.Image
+        """
 
         fig, ax = plt.subplots()
 
@@ -99,7 +152,18 @@ class ProjectionVisualizer(VisualizerBase):
     def _visualize_3d(
         self, ndarray: np.ndarray, class_series: pd.Series, class_names: list[str]
     ) -> Image.Image:
-        """Return a 3D visualization image."""
+        """
+        Generate 3D scatter plot.
+
+        :param ndarray: Array of shape (n_samples, 3) with point coordinates
+        :type ndarray: np.ndarray
+        :param class_series: Class label for each point (used for coloring)
+        :type class_series: pd.Series
+        :param class_names: Names for legend (one per unique class)
+        :type class_names: list[str]
+        :return: Rendered plot as PIL Image
+        :rtype: Image.Image
+        """
 
         fig = plt.figure(1)
         ax = fig.add_subplot(111, projection="3d", elev=-150, azim=110)
@@ -141,6 +205,17 @@ class ProjectionVisualizer(VisualizerBase):
     def get_visualization(
         self, reduced_df_dict: dict[str, pd.DataFrame]
     ) -> Image.Image:
+        """
+        Generate scatter plot visualization from reduced DataFrames.
+
+        Automatically selects 2D or 3D plotting based on n_dims configuration.
+
+        :param reduced_df_dict: Dictionary mapping dataset names to reduced DataFrames
+        :type reduced_df_dict: dict[str, pd.DataFrame]
+        :return: Rendered scatter plot as PIL Image
+        :rtype: Image.Image
+        """
+
         class_series, concated_ndarray = self._get_visualizable_form(reduced_df_dict)
 
         img = None
@@ -156,4 +231,12 @@ class ProjectionVisualizer(VisualizerBase):
         return img
 
     def set_plot_title(self, title: str):
+        """
+        Update plot title.
+
+        :param title: New title for the plot
+        :type title: str
+        :rtype: None
+        """
+
         self.plot_title = title
