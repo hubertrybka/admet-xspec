@@ -1,7 +1,6 @@
 ### Setting up dependencies for Read the Docs
 ```bash
-touch docs/requirements.in
-printf sphinx==9.0.4 > docs/requirements.in
-uv pip freeze >> docs/requirements.in
-uv run pip-compile docs/requirements.in
+touch docs/requirements.txt
+printf sphinx==9.0.4 > docs/requirements.tx
+uv pip freeze >> docs/requirements.txt
 ```
