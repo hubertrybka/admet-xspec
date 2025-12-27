@@ -1,0 +1,123 @@
+# Macros:
+# ==============================================================================
+data_interface = @data_interface/gin.singleton()
+featurizer = @featurizer/gin.singleton()
+predictor = @predictor/gin.singleton()
+sim_filter = @sim_filter/gin.singleton()
+splitter = @splitter/gin.singleton()
+tanimoto_featurizer = @featurizer/gin.singleton()
+
+# Parameters for data_interface/DataInterface:
+# ==============================================================================
+data_interface/DataInterface.cache_dir = 'data/cache'
+data_interface/DataInterface.data_config_filename = 'params.yaml'
+data_interface/DataInterface.dataset_dir = 'data/datasets'
+data_interface/DataInterface.prepared_filename = 'prepared_data.csv'
+data_interface/DataInterface.registry_filename = 'registry.txt'
+data_interface/DataInterface.visualizations_dir = 'data/visualizations'
+
+# Parameters for featurizer/EcfpFeaturizer:
+# ==============================================================================
+featurizer/EcfpFeaturizer.count = False
+featurizer/EcfpFeaturizer.n_bits = 2048
+featurizer/EcfpFeaturizer.radius = 2
+
+# Parameters for ProcessingPipeline:
+# ==============================================================================
+ProcessingPipeline.data_interface = %data_interface
+ProcessingPipeline.datasets = ['AChE_human_IC50']
+ProcessingPipeline.do_dump_train_test = True
+ProcessingPipeline.do_load_datasets = True
+ProcessingPipeline.do_load_optimized_hyperparams = False
+ProcessingPipeline.do_load_train_test = True
+ProcessingPipeline.do_optimize_hyperparams = True
+ProcessingPipeline.do_refit_final_model = True
+ProcessingPipeline.do_train_model = True
+ProcessingPipeline.do_visualize_datasets = False
+ProcessingPipeline.do_visualize_train_test = False
+ProcessingPipeline.featurizer = %featurizer
+ProcessingPipeline.manual_test_splits = None
+ProcessingPipeline.manual_train_splits = None
+ProcessingPipeline.override_cache = False
+ProcessingPipeline.predictor = %predictor
+ProcessingPipeline.reducer = None
+ProcessingPipeline.sim_filter = %sim_filter
+ProcessingPipeline.smiles_col = 'smiles'
+ProcessingPipeline.source_col = 'source'
+ProcessingPipeline.splitter = %splitter
+ProcessingPipeline.target_col = 'y'
+ProcessingPipeline.task_setting = 'binary_classification'
+ProcessingPipeline.test_origin_dataset = 'AChE_human_IC50'
+
+# Parameters for n_estimators/QLogUniform:
+# ==============================================================================
+n_estimators/QLogUniform.max = 2000
+n_estimators/QLogUniform.min = 100
+
+# Parameters for max_depth/QUniform:
+# ==============================================================================
+max_depth/QUniform.max = 50
+max_depth/QUniform.min = 2
+
+# Parameters for min_samples_leaf/QUniform:
+# ==============================================================================
+min_samples_leaf/QUniform.max = 10
+min_samples_leaf/QUniform.min = 1
+
+# Parameters for min_samples_split/QUniform:
+# ==============================================================================
+min_samples_split/QUniform.max = 10
+min_samples_split/QUniform.min = 2
+
+# Parameters for predictor/RfClassifier:
+# ==============================================================================
+predictor/RfClassifier.n_folds = 5
+predictor/RfClassifier.n_jobs = -1
+predictor/RfClassifier.optimization_iterations = 100
+predictor/RfClassifier.params = \
+    {'criterion': 'gini',
+     'max_depth': 20,
+     'max_features': 'sqrt',
+     'min_samples_leaf': 1,
+     'min_samples_split': 3,
+     'n_estimators': 500}
+predictor/RfClassifier.params_distribution = \
+    {'criterion': ['gini', 'entropy'],
+     'max_depth': @max_depth/QUniform(),
+     'max_features': ['sqrt', 'log2'],
+     'min_samples_leaf': @min_samples_leaf/QUniform(),
+     'min_samples_split': @min_samples_split/QUniform(),
+     'n_estimators': @n_estimators/QLogUniform()}
+predictor/RfClassifier.random_state = 42
+predictor/RfClassifier.target_metric = 'roc_auc'
+
+# Parameters for splitter/ScaffoldSplitter:
+# ==============================================================================
+splitter/ScaffoldSplitter.random_state = 42
+splitter/ScaffoldSplitter.test_size = 0.2
+
+# Parameters for data_interface/singleton:
+# ==============================================================================
+data_interface/singleton.constructor = @DataInterface
+
+# Parameters for featurizer/singleton:
+# ==============================================================================
+featurizer/singleton.constructor = @EcfpFeaturizer
+
+# Parameters for predictor/singleton:
+# ==============================================================================
+predictor/singleton.constructor = @RfClassifier
+
+# Parameters for sim_filter/singleton:
+# ==============================================================================
+sim_filter/singleton.constructor = @TanimotoFilter
+
+# Parameters for splitter/singleton:
+# ==============================================================================
+splitter/singleton.constructor = @ScaffoldSplitter
+
+# Parameters for sim_filter/TanimotoFilter:
+# ==============================================================================
+sim_filter/TanimotoFilter.against = 'test_origin'
+sim_filter/TanimotoFilter.featurizer = %tanimoto_featurizer
+sim_filter/TanimotoFilter.min_distance_to_test_post_filtering = 0.05

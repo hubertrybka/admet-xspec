@@ -1,0 +1,3 @@
+friendly_name: bin_train_MAO_hum_IC5_MAO_rat_IC5_scaffold_e4737
+raw_or_derived: derived
+task: binary_classification

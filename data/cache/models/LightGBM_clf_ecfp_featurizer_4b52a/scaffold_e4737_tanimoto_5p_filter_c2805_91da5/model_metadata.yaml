@@ -1,0 +1,11 @@
+Datasets:
+- MAOA_human_IC50
+- MAOA_rat_IC50
+Featurizer: ecfp_featurizer
+Optimized Hyperparameters: true
+Predictor: LightGBM_clf
+Similarity Filter: tanimoto_5p_filter
+Splitter: scaffold
+Task Setting: binary_classification
+Test Origin Dataset: MAOA_human_IC50
+Training set size: 4272
