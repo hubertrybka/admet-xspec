@@ -1,5 +1,5 @@
 Welcome to Admet-XSpec's documentation!
-===================================
+=======================================
 
 **ADMET-XSpec** is an open-source tool that facilitates systematic
 cross-species data integration for training ADMET (*Absorption,
