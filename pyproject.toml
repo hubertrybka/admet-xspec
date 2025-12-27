@@ -3,7 +3,7 @@ name = "admet-prediction"
 version = "1.0.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = "==3.11.8"
+requires-python = ">=3.11.8"
 dependencies = [
     "chemprop==2.2.1",
     "gin-config==0.5.0",
