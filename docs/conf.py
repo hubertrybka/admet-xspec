@@ -1,5 +1,13 @@
 # Configuration file for the Sphinx documentation builder.
 
+# Make conf.py resolve our module
+# https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#module-sphinx.ext.autodoc
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("..").resolve()))
+
+
 # -- Project information
 
 project = "ADMET-XSpec"
