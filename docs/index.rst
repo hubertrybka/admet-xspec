@@ -21,3 +21,9 @@ Our source code is hosted on Github: the `ADMET-XSpec repository <https://github
    This project is under active development.
    We expect to increment and restructure over the following months, and
    cannot guarantee the stability of all interfaces.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   api
