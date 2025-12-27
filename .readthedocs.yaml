@@ -18,3 +18,6 @@ sphinx:
 python:
   install:
   - requirements: docs/requirements.txt
+  # Install ADMET-XSpec as a package (this is required to build docs from docstrings using autodoc)
+  - method: pip
+    path: .
