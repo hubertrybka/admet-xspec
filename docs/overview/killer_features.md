@@ -1,3 +1,5 @@
+Killer features
+===============
 1. Pick and mix featurizers, predictors and similarity filters. Track your experiments in an easily-modifiable file.
 
 We use Google's [gin-config](https://github.com/google/gin-config), a "lightweight configuration framework for Python". The featurizer, predictory and filter components of ADMET-XSpec can be found in the project root directory under `./configs`:

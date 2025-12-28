@@ -1,3 +1,6 @@
+Three experiments you can run right now
+=======================================
+
 Set up our repository as outlined in 'Installation'.
 
 1. I want to investigate how integrating mouse and rat data with human data affects predicting the activity or inactivity of a molecule, with respect to IC50 in acetylcholinesterase (AChE), using random forests:
