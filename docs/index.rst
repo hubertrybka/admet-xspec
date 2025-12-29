@@ -27,3 +27,4 @@ Our source code is hosted on Github: the `ADMET-XSpec repository <https://github
    :caption: Contents:
 
    overview/index
+   api/index
