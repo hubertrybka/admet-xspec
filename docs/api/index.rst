@@ -2,7 +2,7 @@ API
 ===
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    src/data_datainterface
    src/data_featurizer

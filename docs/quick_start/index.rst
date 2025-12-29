@@ -2,7 +2,7 @@ Quick start
 ===========
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    conda_installation
    uv_installation
