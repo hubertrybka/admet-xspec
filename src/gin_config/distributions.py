@@ -14,6 +14,24 @@ import abc
 
 
 class Distribution(abc.ABC):
+    """
+    Base class for hyperparameter distributions.
+
+    Provides unified interface for sampling from bounded distributions and
+    integration with Ray Tune for hyperparameter optimization.
+
+    :param min: Lower bound of the distribution
+    :type min: float
+    :param max: Upper bound of the distribution
+    :type max: float
+    :ivar lower: Configured lower bound
+    :type lower: float
+    :ivar upper: Configured upper bound
+    :type upper: float
+    :ivar distribution: Initialized scipy.stats distribution object
+    :type distribution: scipy.stats distribution
+    """
+
     def __init__(self, min=0, max=1):
         super().__init__()
         self.lower = min
@@ -21,6 +39,16 @@ class Distribution(abc.ABC):
         self.distribution = self._init_distribution()
 
     def rvs(self, size=1, **kwargs):
+        """
+        Generate random samples from the distribution.
+
+        :param size: Number of samples to generate
+        :type size: int
+        :param kwargs: Additional arguments passed to scipy.stats distribution.rvs()
+        :return: Single random sample (when size=1) or array of samples
+        :rtype: float or np.ndarray
+        """
+
         samples = self.distribution.rvs(size=size, **kwargs)
         return samples[0]
 
@@ -42,7 +70,14 @@ class Uniform(Distribution):
         return f"Uniform (lower={self.lower}, upper={self.upper})"
 
     def get_ray_distrib(self):
-        """Get the corresponding Ray library distribution object - used by ChemProp models"""
+        """
+        Get Ray Tune compatible distribution object.
+
+        Used by ChemProp models for hyperparameter search.
+
+        :return: Ray Tune uniform distribution
+        :rtype: ray.tune.search.sample.Domain
+        """
         return tune.uniform(self.lower, self.upper)
 
 
@@ -55,7 +90,14 @@ class LogUniform(Distribution):
         return f"LogUniform (lower={self.lower}, upper={self.upper})"
 
     def get_ray_distrib(self):
-        """Get the corresponding Ray library distribution object - used by ChemProp models"""
+        """
+        Get Ray Tune compatible distribution object.
+
+        Used by ChemProp models for hyperparameter search.
+
+        :return: Ray Tune uniform distribution
+        :rtype: ray.tune.search.sample.Domain
+        """
         return tune.loguniform(self.lower, self.upper)
 
 
@@ -72,7 +114,14 @@ class QUniform(Distribution):
         return f"QUniform (lower={self.lower}, upper={self.upper})"
 
     def get_ray_distrib(self):
-        """Get the corresponding Ray library distribution object - used by ChemProp models"""
+        """
+        Get Ray Tune compatible distribution object.
+
+        Used by ChemProp models for hyperparameter search.
+
+        :return: Ray Tune uniform distribution
+        :rtype: ray.tune.search.sample.Domain
+        """
         return tune.randint(self.lower, self.upper + 1)
 
 
@@ -89,5 +138,12 @@ class QLogUniform(Distribution):
         return f"QLogUniform (lower={self.lower}, upper={self.upper})"
 
     def get_ray_distrib(self):
-        """Get the corresponding Ray library distribution object - used by ChemProp models"""
+        """
+        Get Ray Tune compatible distribution object.
+
+        Used by ChemProp models for hyperparameter search.
+
+        :return: Ray Tune uniform distribution
+        :rtype: ray.tune.search.sample.Domain
+        """
         return tune.qloguniform(self.lower, self.upper, q=1, base=10)

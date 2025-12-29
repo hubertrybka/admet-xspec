@@ -15,33 +15,64 @@ from sklearn.preprocessing import StandardScaler
 
 
 class FeaturizerBase(abc.ABC):
-    """Base class for molecular featurizers."""
+    """
+    Base class for molecular featurizers.
+    Abstract interface for converting SMILES strings to numerical feature representations.
+    """
 
     @abc.abstractmethod
     def featurize(self, smiles_list: List[str]) -> np.ndarray:
-        """Convert SMILES strings to numerical feature arrays."""
+        """
+        Convert SMILES strings to numerical feature arrays.
+
+        :param smiles_list: List of SMILES strings representing molecules
+        :type smiles_list: List[str]
+        :return: 2D array where each row corresponds to a molecule's feature vector
+        :rtype: np.ndarray
+        """
         pass
 
     @property
     @abc.abstractmethod
     def feature_name(self) -> str:
-        """Column name for storing features."""
+        """
+        Column name for storing features.
+
+        :return: Name used for feature column in DataFrames
+        :rtype: str
+        """
         pass
 
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """Human-readable featurizer name."""
+        """
+        Human-readable featurizer name.
+
+        :return: Descriptive name for this featurizer
+        :rtype: str
+        """
         pass
 
     @abc.abstractmethod
     def get_hashable_params_values(self) -> List[Hashable]:
-        """Return parameters for hashing/caching purposes."""
+        """
+        Return parameters for hashing/caching purposes.
+
+        :return: List of parameter values that uniquely identify this featurizer configuration
+        :rtype: List[Hashable]
+        """
         pass
 
     def get_cache_key(self):
         """
-        Generate a 5-character cache key.
+        Generate a 5-character cache key from featurizer parameters.
+
+        Creates identifier by MD5 hashing the parameter values and combining
+        with featurizer name.
+
+        :return: Cache key in format '{name}_{hash[:5]}'
+        :rtype: str
         """
         params_values = self.get_hashable_params_values()
         params_values = str(params_values).encode("utf-8")

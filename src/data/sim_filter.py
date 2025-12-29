@@ -14,9 +14,15 @@ class SimilarityFilterBase(abc.ABC):
     """
     Base class for similarity-based filtering of molecular data.
 
-    Implements two strategies controlled by the 'against' parameter:
+    Implements two filtering strategies controlled by the 'against' parameter:
       - "test": filters augmentation molecules against the test set
       - "test_origin": filters augmentation molecules against test origin (train + test)
+
+    :param against: Filtering strategy ('test' or 'test_origin')
+    :type against: str
+    :raises ValueError: If against is not 'test' or 'test_origin'
+    :ivar against: The selected filtering strategy
+    :type against: str
     """
 
     def __init__(self, against: str) -> None:
@@ -29,16 +35,33 @@ class SimilarityFilterBase(abc.ABC):
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """Human-readable filter name."""
+        """
+        Human-readable filter name.
+
+        :return: Descriptive name for this similarity filter
+        :rtype: str
+        """
         pass
 
     @abc.abstractmethod
     def get_hashable_params_values(self) -> list[str]:
+        """
+        Return parameters for hashing/caching purposes.
+
+        :return: List of parameter values that uniquely identify this filter configuration
+        :rtype: list[str]
+        """
         pass
 
-    def get_cache_key(self):
+    def get_cache_key(self) -> str:
         """
-        Generate a 5-character cache key.
+        Generate a 5-character cache key from filter parameters.
+
+        Creates identifier by MD5 hashing the parameter values and combining
+        with filter name.
+
+        :return: Cache key in format '{name}_{hash[:5]}'
+        :rtype: str
         """
         params_values = self.get_hashable_params_values()
         params_values = str(params_values).encode("utf-8")
@@ -50,8 +73,17 @@ class SimilarityFilterBase(abc.ABC):
         self, to_filter_df: pd.DataFrame, filter_against_df: pd.DataFrame
     ) -> pd.DataFrame:
         """
-        Filter `to_filter_df` based on similarity to `filter_against_df`.
-        Returns a filtered copy.
+        Filter molecules based on similarity to reference set.
+
+        Removes molecules from to_filter_df that exceed similarity threshold
+        when compared to molecules in filter_against_df.
+
+        :param to_filter_df: DataFrame containing molecules to be filtered
+        :type to_filter_df: pd.DataFrame
+        :param filter_against_df: Reference DataFrame for similarity comparison
+        :type filter_against_df: pd.DataFrame
+        :return: Filtered copy of to_filter_df with similar molecules removed
+        :rtype: pd.DataFrame
         """
         pass
 
@@ -62,15 +94,19 @@ class SimilarityFilterBase(abc.ABC):
         test_df: pd.DataFrame,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Apply the configured filtering strategy and return (filtered_train, test).
+        Apply filtering strategy and return combined training data with test set.
 
-        Args:
-            train_df: Training split
-            test_df: Test split
-            nosplit_df: Augmentation data (no split applied)
+        Filters augmentation data based on the configured strategy ('test' or 'test_origin'),
+        then combines filtered augmentation with original training data.
 
-        Returns:
-            Tuple of (combined training data with filtered augmentation, test data)
+        :param augmenting_df: Augmentation molecules to be filtered and potentially added
+        :type augmenting_df: pd.DataFrame
+        :param train_df: Original training split
+        :type train_df: pd.DataFrame
+        :param test_df: Test split
+        :type test_df: pd.DataFrame
+        :return: Tuple of (combined training data with filtered augmentation, unmodified test data)
+        :rtype: Tuple[pd.DataFrame, pd.DataFrame]
         """
         # Early exit if no augmentation data
         if augmenting_df is None or augmenting_df.empty:

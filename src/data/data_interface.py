@@ -1,4 +1,3 @@
-# python
 from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 from collections import namedtuple
@@ -18,11 +17,21 @@ from src.predictor.predictor_base import PredictorBase
 @gin.configurable
 class DataInterface:
     """
-    Manage dataset loading, normalization and train/test split saving.
+    Manage dataset loading, normalization, and train/test split persistence.
+
+    :ivar possible_smiles_cols: Column names to search for SMILES strings
+    :type possible_smiles_cols: list[str]
+    :ivar possible_label_cols: Column names to search for target labels
+    :type possible_label_cols: list[str]
+    :ivar logfile: Path to logging output file
+    :type logfile: Path
+    :ivar override_cache: Whether to regenerate cached prepared datasets
+    :type override_cache: bool
+    :ivar task_setting: Task type (regression, binary_classification, multi_class_classification)
+    :type task_setting: str
     """
 
     # TODO: add support for multi-class classification datasets
-
     possible_smiles_cols = ["SMILES", "Smiles", "smiles", "molecule"]
     possible_label_cols = ["LABEL", "Label", "label", "Y", "y", "Standard Value"]
 
@@ -64,18 +73,94 @@ class DataInterface:
         self.update_registries()
         # task_setting must be set externally via set_task_setting before use where required
 
-    def _init_create_dirs(self) -> None:
-        self.dataset_dir.mkdir(parents=True, exist_ok=True)
-        self.visualizations_dir.mkdir(parents=True, exist_ok=True)
-        self.splits_dir.mkdir(parents=True, exist_ok=True)
+    @classmethod
+    def get_smiles_col_in_raw(cls, raw_df: pd.DataFrame) -> str:
+        """
+        Identify SMILES column in raw dataset by checking known column names.
+
+        :param raw_df: Raw dataset DataFrame
+        :type raw_df: pd.DataFrame
+        :return: Name of SMILES column
+        :rtype: str
+        :raises ValueError: If no SMILES column found in DataFrame
+        """
+
+        for c in cls.possible_smiles_cols:
+            if c in raw_df.columns:
+                return c
+        raise ValueError(
+            "No SMILES column found. Looked for: " + ", ".join(cls.possible_smiles_cols)
+        )
+
+    @classmethod
+    def get_label_col_in_raw(cls, raw_df: pd.DataFrame) -> str:
+        """
+        Identify label column in raw dataset by checking known column names.
+
+        :param raw_df: Raw dataset DataFrame
+        :type raw_df: pd.DataFrame
+        :return: Name of label column
+        :rtype: str
+        :raises ValueError: If no label column found in DataFrame
+        """
+
+        for c in cls.possible_label_cols:
+            if c in raw_df.columns:
+                return c
+        raise ValueError(
+            "No label column found. Looked for: " + ", ".join(cls.possible_label_cols)
+        )
+
+    @staticmethod
+    def get_clean_smiles_df(df: pd.DataFrame, smiles_col: str) -> pd.DataFrame:
+        """
+        Canonicalize SMILES strings and remove rows with invalid SMILES.
+
+        :param df: DataFrame containing SMILES column
+        :type df: pd.DataFrame
+        :param smiles_col: Name of column containing SMILES strings
+        :type smiles_col: str
+        :return: DataFrame with canonicalized SMILES, invalid rows removed
+        :rtype: pd.DataFrame
+        """
+
+        pre = len(df)
+        df[smiles_col] = df[smiles_col].apply(get_clean_smiles)
+        df = df.dropna(subset=[smiles_col]).reset_index(drop=True)
+        if len(df) != pre:
+            logging.info(
+                f"get_clean_smiles dropped {pre - len(df)} rows with invalid SMILES."
+            )
+        return df
 
     def set_logfile(self, logfile: str) -> None:
+        """
+        Set the path for log file output.
+
+        :param logfile: Path to log file
+        :type logfile: str
+        :rtype: None
+        """
         self.logfile = Path(logfile)
 
     def set_override_cache(self, override_cache: bool) -> None:
+        """
+        Control whether to regenerate cached prepared datasets.
+
+        :param override_cache: If True, ignore existing cached datasets
+        :type override_cache: bool
+        :rtype: None
+        """
         self.override_cache = override_cache
 
     def dump_logs(self, path: Path) -> None:
+        """
+        Copy log file contents to specified directory.
+
+        :param path: Directory where logs should be written
+        :type path: Path
+        :rtype: None
+        """
         if self.logfile:
             with open(self.logfile, "r") as fh:
                 contents = fh.read()
@@ -84,10 +169,495 @@ class DataInterface:
                 fh.write(contents)
 
     def dump_gin_config(self, path: Path) -> None:
+        """
+        Write current Gin configuration to specified directory.
+
+        :param path: Directory where config should be written
+        :type path: Path
+        :rtype: None
+        """
         with open(path / self.operative_config_filename, "w") as fh:
             fh.write(gin.operative_config_str())
 
-    # --- discovery helpers -------------------------------------------------
+    def set_task_setting(self, task_setting: str) -> None:
+        """
+        Set the machine learning task type.
+
+        :param task_setting: One of 'regression', 'binary_classification', 'multi_class_classification'
+        :type task_setting: str
+        :raises AssertionError: If task_setting is not one of the allowed values
+        :rtype: None
+        """
+        assert task_setting in [
+            "regression",
+            "binary_classification",
+            "multi_class_classification",
+        ], f"Unknown task_setting parsed: {task_setting}"
+        self.task_setting = task_setting
+
+    def get_normalized_df(self, df_to_prepare: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalize dataset to standard format with 'smiles' and 'y' columns.
+
+        Performs column renaming, SMILES canonicalization, and removal of rows
+        with NaN values in either column.
+
+        :param df_to_prepare: Raw dataset DataFrame
+        :type df_to_prepare: pd.DataFrame
+        :return: Normalized DataFrame with columns 'smiles' and 'y'
+        :rtype: pd.DataFrame
+        :raises RuntimeError: If normalized DataFrame lacks 'smiles' or 'y' columns
+        """
+
+        logging.debug(f"Normalizing dataset with {len(df_to_prepare)}")
+        smiles_col = self.get_smiles_col_in_raw(df_to_prepare)
+        label_col = self.get_label_col_in_raw(df_to_prepare)
+
+        # rename to canonical names
+        rename_map = {}
+        if smiles_col != "smiles":
+            rename_map[smiles_col] = "smiles"
+        if label_col != "y":
+            rename_map[label_col] = "y"
+        if rename_map:
+            df_to_prepare = df_to_prepare.rename(columns=rename_map)
+
+        if "smiles" not in df_to_prepare.columns or "y" not in df_to_prepare.columns:
+            raise RuntimeError("Expected `smiles` and `y` columns after normalization.")
+
+        df_to_prepare = self.get_clean_smiles_df(df_to_prepare, "smiles")
+        pre = len(df_to_prepare)
+        df_to_prepare = df_to_prepare.dropna(subset=["y"]).reset_index(drop=True)
+        if len(df_to_prepare) != pre:
+            logging.debug(f"Dropped {pre - len(df_to_prepare)} rows with NaN labels.")
+        return df_to_prepare
+
+    def get_by_friendly_name(
+        self, friendly_name: str, is_in_splits=False
+    ) -> pd.DataFrame:
+        """
+        Load dataset by friendly name from either prepared datasets or splits.
+
+        :param friendly_name: Human-readable dataset identifier
+        :type friendly_name: str
+        :param is_in_splits: If True, load from splits directory; else from datasets
+        :type is_in_splits: bool
+        :return: Loaded dataset
+        :rtype: pd.DataFrame
+        """
+
+        if is_in_splits:
+            dataset_dir_path = self._find_split_dir(friendly_name)
+            dataset = self._load_split_component(dataset_dir_path)
+        else:
+            dataset_dir_path = self._find_dataset_dir(friendly_name)
+            if (
+                not self._check_prepared_dataset_exists(dataset_dir_path)
+                or self.override_cache
+            ):
+                self._generate_prepared_dataset(dataset_dir_path)
+            logging.debug(f"Loading prepared dataset `{friendly_name}`")
+            dataset = self._load_prepared_dataset(dataset_dir_path)
+        return dataset
+
+    def get_split_friendly_names(self, cache_key: str) -> Tuple[str, str]:
+        """
+        Retrieve friendly names for train and test splits from cache key.
+
+        :param cache_key: Unique identifier for the split
+        :type cache_key: str
+        :return: Tuple of (train_friendly_name, test_friendly_name)
+        :rtype: Tuple[str, str]
+        :raises FileNotFoundError: If params file not found for train or test split
+        :raises RuntimeError: If friendly_name not found in params file
+        """
+
+        split_dir = self.splits_dir / cache_key
+        train_params_path = split_dir / "train" / self.params_filename
+        test_params_path = split_dir / "test" / self.params_filename
+        if not train_params_path.exists():
+            raise FileNotFoundError(
+                f"No {self.params_filename} found for train split with cache_key `{cache_key}`"
+            )
+        if not test_params_path.exists():
+            raise FileNotFoundError(
+                f"No {self.params_filename} found for test split with cache_key `{cache_key}`"
+            )
+        with open(train_params_path, "r") as fh:
+            train_params = yaml.safe_load(fh) or {}
+            train_friendly_name = train_params.get("friendly_name")
+            if not train_friendly_name:
+                raise RuntimeError(
+                    f"No `friendly_name` found in train {self.params_filename} for split with cache_key `{cache_key}`"
+                )
+        with open(test_params_path, "r") as fh:
+            test_params = yaml.safe_load(fh) or {}
+            test_friendly_name = test_params.get("friendly_name")
+            if not test_friendly_name:
+                raise RuntimeError(
+                    f"No `friendly_name` found in test {self.params_filename} for split with cache_key `{cache_key}`"
+                )
+        return train_friendly_name, test_friendly_name
+
+    def get_train_test_friendly_names(self, cache_key: str) -> str:
+        """
+        Retrieve friendly name from train split params.
+
+        :param cache_key: Unique identifier for the split
+        :type cache_key: str
+        :return: Friendly name from train split parameters
+        :rtype: str
+        :raises FileNotFoundError: If params file not found for split
+        :raises RuntimeError: If friendly_name not found in params file
+        """
+        split_dir = self.splits_dir / cache_key
+        params_path = split_dir / "train" / self.params_filename
+        if not params_path.exists():
+            raise FileNotFoundError(
+                f"No {self.params_filename} found for split with cache_key `{cache_key}`"
+            )
+        with open(params_path, "r") as fh:
+            params = yaml.safe_load(fh) or {}
+            friendly_name = params.get("friendly_name")
+            if not friendly_name:
+                raise RuntimeError(
+                    f"No `friendly_name` found in {self.params_filename} for split with cache_key `{cache_key}`"
+                )
+            return friendly_name
+
+    def save_visualization(self, friendly_name: str, visualization: Image) -> None:
+        """
+        Save visualization image to visualizations directory.
+
+        :param friendly_name: Identifier used in output filename
+        :type friendly_name: str
+        :param visualization: PIL Image object to save
+        :type visualization: Image
+        :rtype: None
+        """
+        out = self.visualizations_dir / f"vis_{friendly_name}.png"
+        visualization.save(out)
+
+    def save_train_test_split(
+        self,
+        train_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+        cache_key: str,
+        split_friendly_name: str,
+        classification_or_regression: str,
+    ) -> None:
+        """
+        Persist train/test split to disk with metadata.
+
+        Saves both DataFrames as CSV files, creates params YAML files with metadata,
+        and dumps Gin config and console logs to the split directory.
+
+        :param train_df: Training set DataFrame
+        :type train_df: pd.DataFrame
+        :param test_df: Test set DataFrame
+        :type test_df: pd.DataFrame
+        :param cache_key: Unique identifier for this split
+        :type cache_key: str
+        :param split_friendly_name: Human-readable name for this split
+        :type split_friendly_name: str
+        :param classification_or_regression: Task type string
+        :type classification_or_regression: str
+        :rtype: None
+        """
+        split_dir_w_hash = self.splits_dir / cache_key
+
+        def _save_component(df: pd.DataFrame, which: str) -> None:
+            path = split_dir_w_hash / which / self.split_datafile_name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(path, index=False)
+            params = {
+                "friendly_name": f"{classification_or_regression[:3]}_{which}_{split_friendly_name}",
+                "raw_or_derived": "derived",
+                "task": classification_or_regression,
+            }
+            with open(path.parent / self.params_filename, "w") as fh:
+                yaml.dump(params, fh)
+
+        _save_component(train_df, "train")
+        _save_component(test_df, "test")
+        split_dir_w_hash.mkdir(parents=True, exist_ok=True)
+
+        # dump gin config
+        self.dump_gin_config(split_dir_w_hash)
+
+        # dump console log
+        self.dump_logs(split_dir_w_hash)
+
+        logging.info(f"Saved split at `{split_dir_w_hash}`")
+
+    def check_train_test_split_exists(self, cache_key: str) -> bool:
+        """
+        Check if train/test split files exist for given cache key.
+
+        :param cache_key: Unique identifier for the split
+        :type cache_key: str
+        :return: True if both train and test CSV files exist
+        :rtype: bool
+        """
+
+        split_dir_w_hash = self.splits_dir / cache_key
+        train_path = split_dir_w_hash / "train" / self.split_datafile_name
+        test_path = split_dir_w_hash / "test" / self.split_datafile_name
+        return train_path.exists() and test_path.exists()
+
+    def pickle_model(
+        self,
+        model: PredictorBase,
+        model_cache_key: str,
+        data_cache_key: str,
+        save_as_refit: bool = False,
+    ) -> None:
+        """
+        Serialize trained model to disk using pickle.
+
+        :param model: Trained predictor instance
+        :type model: PredictorBase
+        :param model_cache_key: Model identifier (e.g., algorithm type)
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :param save_as_refit: If True, save as refit model; else as standard model
+        :type save_as_refit: bool
+        :rtype: None
+        """
+
+        path = self.models_dir / model_cache_key / data_cache_key
+        path = (
+            path / self.model_refit_filename
+            if save_as_refit
+            else path / self.model_filename
+        )
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Saving trained model to `{path}`")
+        # Pickle the model
+        with open(path, "wb") as f:
+            pickle.dump(model, f)
+
+    def save_model_metadata(
+        self,
+        metadata: Dict,
+        model_cache_key: str,
+        data_cache_key: str,
+    ) -> None:
+        """
+        Save model metadata to YAML file.
+
+        :param metadata: Dictionary of metadata key-value pairs
+        :type metadata: Dict
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :rtype: None
+        """
+
+        path = (
+            self.models_dir
+            / model_cache_key
+            / data_cache_key
+            / self.model_metadata_filename
+        )
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as fh:
+            yaml.dump(metadata, fh)
+
+    def unpickle_model(
+        self, model_cache_key: str, data_cache_key: str
+    ) -> PredictorBase:
+        """
+        Deserialize trained model from disk.
+
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :return: Loaded predictor instance
+        :rtype: PredictorBase
+        :raises FileNotFoundError: If model file does not exist at expected path
+        """
+
+        # Check if the path exists
+        path = self.models_dir / model_cache_key / data_cache_key / self.model_filename
+        if not path.exists():
+            raise FileNotFoundError(f"Model file not found at {path}")
+        # Load the model
+        with open(path, "rb") as f:
+            loaded_model = pickle.load(f)
+            return loaded_model
+
+    def save_metrics(
+        self, metrics: Dict, model_cache_key: str, data_cache_key: str
+    ) -> None:
+        """
+        Save model evaluation metrics to YAML file.
+
+        :param metrics: Dictionary of metric names and values
+        :type metrics: Dict
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :rtype: None
+        """
+
+        path = (
+            self.models_dir
+            / model_cache_key
+            / data_cache_key
+            / self.model_metrics_filename
+        )
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as fh:
+            yaml.dump(metrics, fh)
+
+    def save_hyperparams(
+        self, params: Dict, model_cache_key: str, data_cache_key: str
+    ) -> None:
+        """
+        Save model hyperparameters to YAML file.
+
+        :param params: Dictionary of hyperparameter names and values
+        :type params: Dict
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :rtype: None
+        """
+
+        path = (
+            self.models_dir
+            / model_cache_key
+            / data_cache_key
+            / self.model_params_filename
+        )
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as fh:
+            yaml.dump(params, fh)
+
+    def load_hyperparams(self, model_cache_key: str, data_cache_key: str) -> Dict:
+        """
+        Load model hyperparameters from YAML file.
+
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :return: Dictionary of hyperparameter names and values
+        :rtype: Dict
+        :raises FileNotFoundError: If params file does not exist
+        """
+
+        path = (
+            self.models_dir
+            / model_cache_key
+            / data_cache_key
+            / self.model_params_filename
+        )
+        if not path.exists():
+            raise FileNotFoundError(f"Model params file not found at {path}")
+        with open(path, "r") as fh:
+            return yaml.safe_load(fh) or {}
+
+    def dump_training_logs(self, model_cache_key: str, data_cache_key: str) -> None:
+        """
+        Copy training logs to model directory.
+
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :rtype: None
+        """
+
+        path = self.models_dir / model_cache_key / data_cache_key / "training_log"
+        self.dump_logs(path)
+
+    def dump_gin_config_to_model_dir(
+        self, model_cache_key: str, data_cache_key: str
+    ) -> None:
+        """
+        Write Gin configuration to model directory.
+
+        :param model_cache_key: Model identifier
+        :type model_cache_key: str
+        :param data_cache_key: Data split identifier
+        :type data_cache_key: str
+        :rtype: None
+        """
+
+        path = self.models_dir / model_cache_key / data_cache_key
+        self.dump_gin_config(path)
+
+    def update_registries(self) -> None:
+        """
+        Update all registry files.
+
+        Currently updates splits registry only.
+
+        :rtype: None
+        """
+
+        self.update_splits_registry()
+
+    def update_datasets_registry(self) -> None:
+        """
+        Scan dataset directory and write friendly names to registry file.
+
+        Searches for YAML files containing friendly_name field and writes
+        them to registry file.
+
+        :rtype: None
+        """
+
+        names = []
+        for yaml_path in self.dataset_dir.rglob("*.yaml"):
+            with open(yaml_path, "r") as f:
+                data = yaml.safe_load(f) or {}
+                if data.get("friendly_name"):
+                    names.append(data["friendly_name"])
+        with open(self.dataset_dir / self.registry_filename, "w") as fh:
+            for n in names:
+                fh.write(f"{n}\n")
+
+    def update_splits_registry(self) -> None:
+        """
+        Scan splits directory and write friendly names with timestamps to registry.
+
+        Searches for YAML params files, extracts friendly names and timestamps
+        from console logs, sorts by timestamp, and writes to registry file.
+
+        :rtype: None
+        """
+
+        Split = namedtuple("Split", ["friendly_name", "timestamp"])
+        splits: List[Tuple[str, str]] = []
+        for yaml_path in self.splits_dir.rglob("*.yaml"):
+            with open(yaml_path, "r") as f:
+                data = yaml.safe_load(f) or {}
+                fname = data.get("friendly_name")
+            ts_path = yaml_path.parent.parent / "console.log"
+            ts = ""
+            if ts_path.exists():
+                with open(ts_path, "r") as fh:
+                    ts = fh.readline().strip()
+            if fname:
+                splits.append(Split(fname, ts))
+        splits.sort(key=lambda s: s.timestamp)
+        with open(self.splits_dir / self.registry_filename, "w") as fh:
+            for s in splits:
+                fh.write(f"{s.timestamp} {s.friendly_name}\n")
+
+    def _init_create_dirs(self) -> None:
+        self.dataset_dir.mkdir(parents=True, exist_ok=True)
+        self.visualizations_dir.mkdir(parents=True, exist_ok=True)
+        self.splits_dir.mkdir(parents=True, exist_ok=True)
+
     def _find_dataset_dir(self, friendly_name: str) -> Path:
         for yaml_path in self.dataset_dir.rglob("*.yaml"):
             with open(yaml_path, "r") as f:
@@ -114,7 +684,6 @@ class DataInterface:
     def _check_prepared_dataset_exists(self, dataset_dir_path: Path) -> bool:
         return (dataset_dir_path / self.prepared_filename).exists()
 
-    # --- yaml parsing small helpers ---------------------------------------
     def _read_data_config(self, dataset_dir_path: Path) -> Dict:
         config_path = dataset_dir_path / self.data_config_filename
         if not config_path.exists():
@@ -131,7 +700,6 @@ class DataInterface:
     def _parse_is_chembl(self, dataset_dir_path: Path) -> bool:
         return self._read_data_config(dataset_dir_path).get("is_chembl", False)
 
-    # --- dataframe transformations ----------------------------------------
     def _apply_filter_criteria(
         self, df: pd.DataFrame, dataset_dir_path: Path
     ) -> pd.DataFrame:
@@ -273,306 +841,6 @@ class DataInterface:
     def _load_split_component(self, split_dir_path: Path) -> pd.DataFrame:
         return pd.read_csv(split_dir_path / self.split_datafile_name)
 
-    def set_task_setting(self, task_setting: str) -> None:
-        assert task_setting in [
-            "regression",
-            "binary_classification",
-            "multi_class_classification",
-        ], f"Unknown task_setting parsed: {task_setting}"
-        self.task_setting = task_setting
-
-    @staticmethod
-    def get_clean_smiles_df(df: pd.DataFrame, smiles_col: str) -> pd.DataFrame:
-        # apply canonicalization and drop rows where canonicalization produced NaN
-        pre = len(df)
-        df[smiles_col] = df[smiles_col].apply(get_clean_smiles)
-        df = df.dropna(subset=[smiles_col]).reset_index(drop=True)
-        if len(df) != pre:
-            logging.info(
-                f"get_clean_smiles dropped {pre - len(df)} rows with invalid SMILES."
-            )
-        return df
-
-    @classmethod
-    def get_smiles_col_in_raw(cls, raw_df: pd.DataFrame) -> str:
-        for c in cls.possible_smiles_cols:
-            if c in raw_df.columns:
-                return c
-        raise ValueError(
-            "No SMILES column found. Looked for: " + ", ".join(cls.possible_smiles_cols)
-        )
-
-    @classmethod
-    def get_label_col_in_raw(cls, raw_df: pd.DataFrame) -> str:
-        for c in cls.possible_label_cols:
-            if c in raw_df.columns:
-                return c
-        raise ValueError(
-            "No label column found. Looked for: " + ", ".join(cls.possible_label_cols)
-        )
-
-    def get_normalized_df(self, df_to_prepare: pd.DataFrame) -> pd.DataFrame:
-        logging.debug(f"Normalizing dataset with {len(df_to_prepare)}")
-        smiles_col = self.get_smiles_col_in_raw(df_to_prepare)
-        label_col = self.get_label_col_in_raw(df_to_prepare)
-
-        # rename to canonical names
-        rename_map = {}
-        if smiles_col != "smiles":
-            rename_map[smiles_col] = "smiles"
-        if label_col != "y":
-            rename_map[label_col] = "y"
-        if rename_map:
-            df_to_prepare = df_to_prepare.rename(columns=rename_map)
-
-        if "smiles" not in df_to_prepare.columns or "y" not in df_to_prepare.columns:
-            raise RuntimeError("Expected `smiles` and `y` columns after normalization.")
-
-        df_to_prepare = self.get_clean_smiles_df(df_to_prepare, "smiles")
-        pre = len(df_to_prepare)
-        df_to_prepare = df_to_prepare.dropna(subset=["y"]).reset_index(drop=True)
-        if len(df_to_prepare) != pre:
-            logging.debug(f"Dropped {pre - len(df_to_prepare)} rows with NaN labels.")
-        return df_to_prepare
-
-    # --- public dataset getters ------------------------------------------
-    def get_by_friendly_name(
-        self, friendly_name: str, is_in_splits=False
-    ) -> pd.DataFrame:
-        if is_in_splits:
-            dataset_dir_path = self._find_split_dir(friendly_name)
-            dataset = self._load_split_component(dataset_dir_path)
-        else:
-            dataset_dir_path = self._find_dataset_dir(friendly_name)
-            if (
-                not self._check_prepared_dataset_exists(dataset_dir_path)
-                or self.override_cache
-            ):
-                self._generate_prepared_dataset(dataset_dir_path)
-            logging.debug(f"Loading prepared dataset `{friendly_name}`")
-            dataset = self._load_prepared_dataset(dataset_dir_path)
-        return dataset
-
-    def get_split_friendly_names(self, cache_key: str) -> Tuple[str, str]:
-        split_dir = self.splits_dir / cache_key
-        train_params_path = split_dir / "train" / self.params_filename
-        test_params_path = split_dir / "test" / self.params_filename
-        if not train_params_path.exists():
-            raise FileNotFoundError(
-                f"No {self.params_filename} found for train split with cache_key `{cache_key}`"
-            )
-        if not test_params_path.exists():
-            raise FileNotFoundError(
-                f"No {self.params_filename} found for test split with cache_key `{cache_key}`"
-            )
-        with open(train_params_path, "r") as fh:
-            train_params = yaml.safe_load(fh) or {}
-            train_friendly_name = train_params.get("friendly_name")
-            if not train_friendly_name:
-                raise RuntimeError(
-                    f"No `friendly_name` found in train {self.params_filename} for split with cache_key `{cache_key}`"
-                )
-        with open(test_params_path, "r") as fh:
-            test_params = yaml.safe_load(fh) or {}
-            test_friendly_name = test_params.get("friendly_name")
-            if not test_friendly_name:
-                raise RuntimeError(
-                    f"No `friendly_name` found in test {self.params_filename} for split with cache_key `{cache_key}`"
-                )
-        return train_friendly_name, test_friendly_name
-
-    def get_train_test_friendly_names(self, cache_key: str) -> str:
-        split_dir = self.splits_dir / cache_key
-        params_path = split_dir / "train" / self.params_filename
-        if not params_path.exists():
-            raise FileNotFoundError(
-                f"No {self.params_filename} found for split with cache_key `{cache_key}`"
-            )
-        with open(params_path, "r") as fh:
-            params = yaml.safe_load(fh) or {}
-            friendly_name = params.get("friendly_name")
-            if not friendly_name:
-                raise RuntimeError(
-                    f"No `friendly_name` found in {self.params_filename} for split with cache_key `{cache_key}`"
-                )
-            return friendly_name
-
-    def save_visualization(self, friendly_name: str, visualization: Image) -> None:
-        out = self.visualizations_dir / f"vis_{friendly_name}.png"
-        visualization.save(out)
-
-    def save_train_test_split(
-        self,
-        train_df: pd.DataFrame,
-        test_df: pd.DataFrame,
-        cache_key: str,
-        split_friendly_name: str,
-        classification_or_regression: str,
-    ) -> None:
-        split_dir_w_hash = self.splits_dir / cache_key
-
-        def _save_component(df: pd.DataFrame, which: str) -> None:
-            path = split_dir_w_hash / which / self.split_datafile_name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            df.to_csv(path, index=False)
-            params = {
-                "friendly_name": f"{classification_or_regression[:3]}_{which}_{split_friendly_name}",
-                "raw_or_derived": "derived",
-                "task": classification_or_regression,
-            }
-            with open(path.parent / self.params_filename, "w") as fh:
-                yaml.dump(params, fh)
-
-        _save_component(train_df, "train")
-        _save_component(test_df, "test")
-        split_dir_w_hash.mkdir(parents=True, exist_ok=True)
-
-        # dump gin config
-        self.dump_gin_config(split_dir_w_hash)
-
-        # dump console log
-        self.dump_logs(split_dir_w_hash)
-
-        logging.info(f"Saved split at `{split_dir_w_hash}`")
-
-    def check_train_test_split_exists(self, cache_key: str) -> bool:
-        split_dir_w_hash = self.splits_dir / cache_key
-        train_path = split_dir_w_hash / "train" / self.split_datafile_name
-        test_path = split_dir_w_hash / "test" / self.split_datafile_name
-        return train_path.exists() and test_path.exists()
-
-    # --- models saving/loading -------------------------------------------
-
-    def pickle_model(
-        self,
-        model: PredictorBase,
-        model_cache_key: str,
-        data_cache_key: str,
-        save_as_refit: bool = False,
-    ) -> None:
-        path = self.models_dir / model_cache_key / data_cache_key
-        path = (
-            path / self.model_refit_filename
-            if save_as_refit
-            else path / self.model_filename
-        )
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        logging.info(f"Saving trained model to `{path}`")
-        # Pickle the model
-        with open(path, "wb") as f:
-            pickle.dump(model, f)
-
-    def save_model_metadata(
-        self,
-        metadata: Dict,
-        model_cache_key: str,
-        data_cache_key: str,
-    ) -> None:
-        path = (
-            self.models_dir
-            / model_cache_key
-            / data_cache_key
-            / self.model_metadata_filename
-        )
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as fh:
-            yaml.dump(metadata, fh)
-
-    def unpickle_model(
-        self, model_cache_key: str, data_cache_key: str
-    ) -> PredictorBase:
-        # Check if the path exists
-        path = self.models_dir / model_cache_key / data_cache_key / self.model_filename
-        if not path.exists():
-            raise FileNotFoundError(f"Model file not found at {path}")
-        # Load the model
-        with open(path, "rb") as f:
-            loaded_model = pickle.load(f)
-            return loaded_model
-
-    def save_metrics(
-        self, metrics: Dict, model_cache_key: str, data_cache_key: str
-    ) -> None:
-        path = (
-            self.models_dir
-            / model_cache_key
-            / data_cache_key
-            / self.model_metrics_filename
-        )
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as fh:
-            yaml.dump(metrics, fh)
-
-    def save_hyperparams(
-        self, params: Dict, model_cache_key: str, data_cache_key: str
-    ) -> None:
-        path = (
-            self.models_dir
-            / model_cache_key
-            / data_cache_key
-            / self.model_params_filename
-        )
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as fh:
-            yaml.dump(params, fh)
-
-    def load_hyperparams(self, model_cache_key: str, data_cache_key: str) -> Dict:
-        path = (
-            self.models_dir
-            / model_cache_key
-            / data_cache_key
-            / self.model_params_filename
-        )
-        if not path.exists():
-            raise FileNotFoundError(f"Model params file not found at {path}")
-        with open(path, "r") as fh:
-            return yaml.safe_load(fh) or {}
-
-    def dump_training_logs(self, model_cache_key: str, data_cache_key: str) -> None:
-        path = self.models_dir / model_cache_key / data_cache_key / "training_log"
-        self.dump_logs(path)
-
-    def dump_gin_config_to_model_dir(
-        self, model_cache_key: str, data_cache_key: str
-    ) -> None:
-        path = self.models_dir / model_cache_key / data_cache_key
-        self.dump_gin_config(path)
-
-    # --- registries ------------------------------------------------------
-    def update_registries(self) -> None:
-        self.update_splits_registry()
-
-    def update_datasets_registry(self) -> None:
-        names = []
-        for yaml_path in self.dataset_dir.rglob("*.yaml"):
-            with open(yaml_path, "r") as f:
-                data = yaml.safe_load(f) or {}
-                if data.get("friendly_name"):
-                    names.append(data["friendly_name"])
-        with open(self.dataset_dir / self.registry_filename, "w") as fh:
-            for n in names:
-                fh.write(f"{n}\n")
-
-    def update_splits_registry(self) -> None:
-        Split = namedtuple("Split", ["friendly_name", "timestamp"])
-        splits: List[Tuple[str, str]] = []
-        for yaml_path in self.splits_dir.rglob("*.yaml"):
-            with open(yaml_path, "r") as f:
-                data = yaml.safe_load(f) or {}
-                fname = data.get("friendly_name")
-            ts_path = yaml_path.parent.parent / "console.log"
-            ts = ""
-            if ts_path.exists():
-                with open(ts_path, "r") as fh:
-                    ts = fh.readline().strip()
-            if fname:
-                splits.append(Split(fname, ts))
-        splits.sort(key=lambda s: s.timestamp)
-        with open(self.splits_dir / self.registry_filename, "w") as fh:
-            for s in splits:
-                fh.write(f"{s.timestamp} {s.friendly_name}\n")
-
-    # --- classification helpers -----------------------------------------
     def _parse_classification_threshold(self, dataset_dir_path: Path) -> float:
         cfg = self._read_data_config(dataset_dir_path)
         if not cfg:

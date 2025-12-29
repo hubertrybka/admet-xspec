@@ -11,7 +11,19 @@ import hashlib
 
 class DataSplitterBase(abc.ABC):
     """
-    Abstract base class for data splitters.
+    Abstract base class for data splitting strategies.
+
+    Provides interface for splitting molecular datasets into training and testing sets
+    with various strategies (random, scaffold-based, stratified, etc.).
+
+    :param test_size: Proportion of dataset to include in test split
+    :type test_size: float
+    :param random_state: Random seed for reproducibility
+    :type random_state: int
+    :ivar test_size: Configured test set proportion
+    :type test_size: float
+    :ivar random_state: Configured random seed
+    :type random_state: int
     """
 
     def __init__(self, test_size=0.2, random_state=42):
@@ -22,16 +34,35 @@ class DataSplitterBase(abc.ABC):
     def split(self, X: pd.Series, y: pd.Series):
         """
         Split the dataset into training and testing sets.
+
+        :param X: SMILES strings or molecular identifiers
+        :type X: pd.Series
+        :param y: Target labels or values
+        :type y: pd.Series
+        :return: Training and testing indices or data splits
+        :rtype: Tuple or similar split representation
         """
         pass
 
     @abc.abstractmethod
     def get_hashable_params_values(self) -> list:
+        """
+        Return parameters for hashing/caching purposes.
+
+        :return: List of parameter values that uniquely identify this splitter configuration
+        :rtype: list
+        """
         pass
 
     @property
     @abc.abstractmethod
     def name(self):
+        """
+        Human-readable splitter name.
+
+        :return: Descriptive name for this splitting strategy
+        :rtype: str
+        """
         pass
 
     @staticmethod
@@ -44,7 +75,17 @@ class DataSplitterBase(abc.ABC):
         self,
         multiple_friendly_names: list[str],
     ) -> str:
+        """
+        Generate human-readable name for split from component dataset names.
 
+        Combines abbreviated versions of input dataset names with splitter cache key.
+        Each dataset name is truncated to first 3 characters of its first 3 underscore-separated parts.
+
+        :param multiple_friendly_names: List of dataset friendly names being split
+        :type multiple_friendly_names: list[str]
+        :return: Combined friendly name for this split
+        :rtype: str
+        """
         generated_name_chunks: list[str] = [
             "_".join([part[:3] for part in name.split("_")[:3]])
             for name in multiple_friendly_names
@@ -55,7 +96,13 @@ class DataSplitterBase(abc.ABC):
 
     def get_cache_key(self):
         """
-        Generate a 5-character cache key.
+        Generate a 5-character cache key from splitter parameters.
+
+        Creates identifier by MD5 hashing the parameter values and combining
+        with splitter name.
+
+        :return: Cache key in format '{name}_{hash[:5]}'
+        :rtype: str
         """
         params_values = self.get_hashable_params_values()
         params_values = str(params_values).encode("utf-8")
