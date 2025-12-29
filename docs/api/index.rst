@@ -1,5 +1,9 @@
-src.data.data_interface
-=======================
+API
+===
 
-.. automodule:: src.data.data_interface
-   :members:
+.. toctree::
+   :maxdepth: 1
+
+   src_data_datainterface
+   src_data_featurizer
+   src_processingpipeline
