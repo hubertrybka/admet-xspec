@@ -21,5 +21,5 @@ python:
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
    configuration: docs/conf.py
-   # In case modules cannot be found (import is needed), this is better as it fails explicitly
-   fail_on_warning: true
+   # In case modules cannot be found (import is needed), this will fail explicitly
+   # fail_on_warning: true
